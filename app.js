@@ -106,7 +106,7 @@
         [['k', 'status    '], ['s', C.MINT_LIVE ? 'LIVE' : 'opens after selection']]
       ] },
       { cmd: 'elyfluff mainnet', out: function () { return [[['k', 'elysium   '], ['ok', cd()]]]; } },
-      { cmd: 'elyfluff tokenomics', out: [
+      { cmd: 'elyfluff tokenomics', locked: true, out: [
         [['k', 'nft holders  '], ['v', '40%'], ['k', '   token holders '], ['v', '20%']],
         [['k', 'active users '], ['v', '15%'], ['k', '   liquidity     '], ['v', '15%']]
       ] }
@@ -129,6 +129,7 @@
       var i = 0;
       while (true) {
         var s = script[i++ % script.length];
+        if (s.locked && !isUnlocked()) { s = { cmd: 'cat ./vault', out: [[['k', 'access    '], ['pr', 'LOCKED'], ['k', '  complete 4 tasks to unlock']]] }; }
         var d = line([['pr', '~ $ '], ['cm', '']]);
         var cm = d.lastChild, caret = el('span', 'caret');
         d.appendChild(caret);
@@ -472,7 +473,7 @@
   /* ---------- reveal ---------- */
   function reveal() {
     var els = $$('.reveal');
-    function show(e) { e.classList.add('in'); showTokenomics(e); if (e.id === 'map') setTimeout(drawMap, 50); }
+    function show(e) { e.classList.add('in'); showTokenomics(e); }
     if (!('IntersectionObserver' in window) || reduced) { els.forEach(show); return; }
     var io = new IntersectionObserver(function (entries) {
       entries.forEach(function (en) { if (en.isIntersecting) { show(en.target); io.unobserve(en.target); } });
@@ -480,44 +481,235 @@
     els.forEach(function (e) { io.observe(e); });
   }
 
-  /* ---------- roadmap map ---------- */
-  var runAnim = null;
-  function drawMap() {
-    var map = $('#map'), svg = $('#mapSvg');
-    if (!map || !svg) return;
-    var box = map.getBoundingClientRect();
-    if (!box.width) return;
-    var pts = $$('.st-node', map).map(function (n) {
-      var b = n.getBoundingClientRect();
-      return [b.left - box.left + b.width / 2, b.top - box.top + b.height / 2];
-    });
-    if (pts.length < 2) return;
-    svg.setAttribute('viewBox', '0 0 ' + box.width + ' ' + box.height);
-    var vertical = Math.abs(pts[1][0] - pts[0][0]) < 20;
-    var d = 'M' + pts[0][0] + ' ' + pts[0][1];
-    for (var i = 1; i < pts.length; i++) {
-      var p0 = pts[i - 1], p1 = pts[i];
-      if (vertical) {
-        var my = (p0[1] + p1[1]) / 2;
-        d += ' C' + p0[0] + ' ' + my + ' ' + p1[0] + ' ' + my + ' ' + p1[0] + ' ' + p1[1];
-      } else {
-        var mx = (p0[0] + p1[0]) / 2;
-        d += ' C' + mx + ' ' + p0[1] + ' ' + mx + ' ' + p1[1] + ' ' + p1[0] + ' ' + p1[1];
-      }
+  /* ---------- treasure map roadmap ---------- */
+  var CURRENT_PHASE = 0;
+  function phases() {
+    var price = C.GTD_MINT_PRICE || '0.33 HYPE';
+    return [
+      { n: 'I', name: 'Whitelist Isle', place: 'Phase 01 · you are here', text: 'The journey starts here. Complete the social tasks and register your wallet.', items: ['Follow, like, repost and comment on X', 'Register your EVM wallet', 'Get your ElyFluff card and invite link'] },
+      { n: 'II', name: 'Selection Reef', place: 'Phase 02', text: 'The crew is chosen from everyone who finished the tasks.', items: ['GTD list is selected', 'FCFS list is selected', 'Results are announced on X'] },
+      { n: 'III', name: 'HyperEVM Bay', place: 'Phase 03 · testnet launch', text: 'The test launch on HyperEVM Testnet.', items: ['GTD mints the NFT for ' + price, 'FCFS receives testnet ' + TICKER, 'Testnet holders are recorded'] },
+      { n: 'IV', name: 'Qualification Pass', place: 'Phase 04', text: 'Only proven holders pass through to mainnet.', items: ['Testnet NFT holders qualify', 'Testnet ' + TICKER + ' holders qualify', 'The mainnet list is locked'] },
+      { n: 'V', name: 'Elysium', place: 'The treasure · Nov 9', text: 'Elysium mainnet goes live. The treasure waits here.', items: ['ElyFluff NFT and ' + TICKER + ' launch', '40% of ' + TICKER + ' to NFT holders', '20% to token holders, 15% to Elysium active users'] }
+    ];
+  }
+  var mapSt = { mode: '', sel: CURRENT_PHASE, raf: 0, trail: null };
+  function f1(v) { return Math.round(v * 10) / 10; }
+  function blob(cx, cy, r, rnd, sx, sy) {
+    var n = 11, pts = [], i;
+    for (i = 0; i < n; i++) { var a = i / n * Math.PI * 2, rr = r * (0.72 + rnd() * 0.45); pts.push([cx + Math.cos(a) * rr * (sx || 1.15), cy + Math.sin(a) * rr * (sy || 0.85)]); }
+    var d = 'M' + f1(pts[0][0]) + ' ' + f1(pts[0][1]);
+    for (i = 0; i < n; i++) {
+      var p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
+      d += ' C' + f1(p1[0] + (p2[0] - p0[0]) / 6) + ' ' + f1(p1[1] + (p2[1] - p0[1]) / 6) + ' ' + f1(p2[0] - (p3[0] - p1[0]) / 6) + ' ' + f1(p2[1] - (p3[1] - p1[1]) / 6) + ' ' + f1(p2[0]) + ' ' + f1(p2[1]);
     }
-    var base = $('#routeBase'), done = $('#routeDone'), run = $('#routeRun');
-    [base, done, run].forEach(function (p) { p.setAttribute('d', d); });
-    var total = base.getTotalLength();
-    var gr = $('#routeGrad'), a = pts[0], z = pts[pts.length - 1];
-    gr.setAttribute('x1', a[0]); gr.setAttribute('y1', a[1]); gr.setAttribute('x2', z[0]); gr.setAttribute('y2', z[1]);
-    var activeIdx = Math.max(0, $$('.st', map).findIndex(function (s) { return s.classList.contains('active'); }));
-    var doneLen = activeIdx === 0 ? total * 0.12 : total * activeIdx / (pts.length - 1);
-    done.style.strokeDasharray = doneLen + ' ' + total;
-    run.style.strokeDasharray = '26 ' + total;
-    if (runAnim) runAnim.cancel();
-    if (!reduced && run.animate) {
-      runAnim = run.animate([{ strokeDashoffset: 26 }, { strokeDashoffset: -total }], { duration: 7000, iterations: Infinity, easing: 'linear' });
-    } else { run.style.display = 'none'; }
+    return d + 'Z';
+  }
+  function buildMap(force) {
+    var host = $('#tmap');
+    if (!host || !host.clientWidth) return;
+    var portrait = host.clientWidth < 640, mode = portrait ? 'p' : 'l';
+    if (mapSt.mode === mode && !force) return;
+    mapSt.mode = mode;
+    var W = portrait ? 600 : 1000, H = portrait ? 1000 : 620;
+    var P = portrait ? [[150, 850], [430, 690], [175, 505], [430, 330], [290, 235]] : [[140, 455], [335, 240], [525, 440], [710, 215], [880, 400]];
+    var R = portrait ? [86, 76, 80, 76, 96] : [82, 74, 78, 74, 92];
+    var rnd = mulberry32(portrait ? 91 : 77);
+    var INK = '#4A2E14', LAND = '#E6CC92', ph = phases();
+    var o = [];
+    o.push('<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Treasure map roadmap">');
+    o.push('<defs>' +
+      '<radialGradient id="tmPaper" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#F4E6C4"/><stop offset=".62" stop-color="#E4CB97"/><stop offset="1" stop-color="#B98F55"/></radialGradient>' +
+      '<radialGradient id="tmBurn" cx="50%" cy="50%" r="72%"><stop offset=".62" stop-color="#5A3410" stop-opacity="0"/><stop offset=".9" stop-color="#5A3410" stop-opacity=".35"/><stop offset="1" stop-color="#2E1A08" stop-opacity=".75"/></radialGradient>' +
+      '<radialGradient id="tmStain"><stop offset="0" stop-color="#8A5A26" stop-opacity=".16"/><stop offset=".7" stop-color="#8A5A26" stop-opacity=".07"/><stop offset="1" stop-color="#8A5A26" stop-opacity="0"/></radialGradient>' +
+      '<radialGradient id="tmGold"><stop offset="0" stop-color="#FFE9A0"/><stop offset="1" stop-color="#E2B33C" stop-opacity="0"/></radialGradient>' +
+      '<filter id="tmGrain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="3" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 .35  0 0 0 0 .22  0 0 0 0 .08  0 0 0 .22 0"/></filter>' +
+      '<filter id="tmRough"><feTurbulence type="fractalNoise" baseFrequency=".04" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="5"/></filter>' +
+      '</defs>');
+    o.push('<rect width="' + W + '" height="' + H + '" fill="url(#tmPaper)"/>');
+    o.push('<rect width="' + W + '" height="' + H + '" filter="url(#tmGrain)"/>');
+    for (var s = 0; s < 6; s++) o.push('<circle cx="' + f1(rnd() * W) + '" cy="' + f1(rnd() * H) + '" r="' + f1(40 + rnd() * 90) + '" fill="url(#tmStain)"/>');
+    var gl = '';
+    for (var gx = 100; gx < W; gx += 100) gl += 'M' + gx + ' 0V' + H;
+    for (var gy = 100; gy < H; gy += 100) gl += 'M0 ' + gy + 'H' + W;
+    o.push('<path d="' + gl + '" stroke="' + INK + '" stroke-opacity=".1" stroke-width="1" stroke-dasharray="3 7" fill="none"/>');
+
+    function inSea(x, y, pad) {
+      for (var i = 0; i < P.length; i++) { var dx = x - P[i][0], dy = y - P[i][1]; if (dx * dx + dy * dy < Math.pow(R[i] * 1.55 + (pad || 0), 2)) return false; }
+      return x > 40 && x < W - 40 && y > 40 && y < H - 40;
+    }
+    var wv = '';
+    for (var w = 0; w < 70 && wv.split('M').length < 26; w++) {
+      var wx = 50 + rnd() * (W - 100), wy = 50 + rnd() * (H - 100);
+      if (inSea(wx, wy, 10)) wv += 'M' + f1(wx) + ' ' + f1(wy) + 'q7 -7 14 0q7 -7 14 0';
+    }
+    o.push('<path d="' + wv + '" stroke="' + INK + '" stroke-opacity=".38" stroke-width="2" fill="none" stroke-linecap="round"/>');
+
+    var extra = portrait ? [[515, 520, 34], [80, 330, 30], [520, 880, 28]] : [[470, 110, 30], [85, 170, 34], [640, 560, 28], [960, 140, 26]];
+    var isl = '';
+    extra.forEach(function (e) {
+      var d = blob(e[0], e[1], e[2], rnd);
+      isl += '<path d="' + d + '" fill="' + LAND + '" stroke="' + INK + '" stroke-width="2"/>';
+    });
+    P.forEach(function (p, i) {
+      var d = blob(p[0], p[1], R[i], rnd);
+      [1.42, 1.22].forEach(function (k, j) {
+        isl += '<path d="' + d + '" transform="translate(' + p[0] + ' ' + p[1] + ') scale(' + k + ') translate(' + (-p[0]) + ' ' + (-p[1]) + ')" fill="none" stroke="' + INK + '" stroke-opacity="' + (j ? '.32' : '.18') + '" stroke-width="1.6" stroke-dasharray="' + (j ? '6 6' : '3 8') + '" vector-effect="non-scaling-stroke"/>';
+      });
+      isl += '<path d="' + d + '" transform="translate(5 7)" fill="#8A5A26" fill-opacity=".28"/>';
+      isl += '<path d="' + d + '" fill="' + (i === 4 ? '#EBD49E' : LAND) + '" stroke="' + INK + '" stroke-width="2.6"/>';
+      var mts = '';
+      for (var m = 0; m < 3; m++) {
+        var mx = p[0] + (m - 1) * R[i] * 0.42 + (rnd() - 0.5) * 10, my = p[1] - R[i] * 0.32 + (m === 1 ? -8 : 4);
+        mts += 'M' + f1(mx - 13) + ' ' + f1(my + 10) + 'L' + f1(mx) + ' ' + f1(my - 10) + 'L' + f1(mx + 13) + ' ' + f1(my + 10);
+        mts += 'M' + f1(mx) + ' ' + f1(my - 10) + 'L' + f1(mx + 4) + ' ' + f1(my + 10);
+      }
+      isl += '<path d="' + mts + '" stroke="' + INK + '" stroke-opacity=".7" stroke-width="2" fill="none" stroke-linejoin="round"/>';
+    });
+    o.push('<g filter="url(#tmRough)">' + isl + '</g>');
+
+    var tr = 'M' + P[0][0] + ' ' + P[0][1];
+    for (var t = 1; t < P.length; t++) {
+      var a0 = P[t - 1], a1 = P[t], mx2 = (a0[0] + a1[0]) / 2, my2 = (a0[1] + a1[1]) / 2;
+      var dx = a1[0] - a0[0], dy = a1[1] - a0[1], len = Math.sqrt(dx * dx + dy * dy), k2 = (t % 2 ? 1 : -1) * 70;
+      tr += ' Q' + f1(mx2 - dy / len * k2) + ' ' + f1(my2 + dx / len * k2) + ' ' + a1[0] + ' ' + a1[1];
+    }
+    o.push('<path id="tmTrail" d="' + tr + '" fill="none" stroke="' + INK + '" stroke-width="4" stroke-dasharray="1 13" stroke-linecap="round"/>');
+    o.push('<path id="tmDone" d="' + tr + '" fill="none" stroke="#A31C1B" stroke-width="5" stroke-dasharray="16 11" stroke-linecap="round"/>');
+
+    var cp = portrait ? [520, 905] : [88, 100], cr = portrait ? 46 : 52;
+    var star = function (r1, r2, n, rot) { var pts = []; for (var i = 0; i < n * 2; i++) { var rr = i % 2 ? r2 : r1, a = rot + i * Math.PI / n; pts.push(f1(Math.sin(a) * rr) + ',' + f1(-Math.cos(a) * rr)); } return pts.join(' '); };
+    o.push('<g transform="translate(' + cp[0] + ' ' + cp[1] + ')">' +
+      '<circle r="' + cr + '" fill="#EAD7AE" fill-opacity=".6" stroke="' + INK + '" stroke-width="2"/>' +
+      '<circle r="' + (cr - 8) + '" fill="none" stroke="' + INK + '" stroke-width="1" stroke-dasharray="2 4"/>' +
+      '<polygon points="' + star(cr - 4, cr * 0.22, 4, Math.PI / 4) + '" fill="#C9AE7C" stroke="' + INK + '" stroke-width="1.5"/>' +
+      '<polygon points="' + star(cr + 6, cr * 0.2, 4, 0) + '" fill="#3B2412" stroke="' + INK + '" stroke-width="1.5"/>' +
+      '<polygon points="0,' + (-cr - 6) + ' 7,-8 -7,-8" fill="#A31C1B"/>' +
+      '<circle r="5" fill="#EAD7AE" stroke="' + INK + '" stroke-width="2"/>' +
+      '<text y="' + (-cr - 14) + '" text-anchor="middle" class="tm-label" font-size="24">N</text></g>');
+
+    var bn = portrait ? [300, 62, 470] : [520, 62, 460];
+    var bx0 = bn[0] - bn[2] / 2, bx1 = bn[0] + bn[2] / 2, by = bn[1];
+    o.push('<g>' +
+      '<path d="M' + (bx0 - 34) + ' ' + (by - 14) + 'h60v52h-60l18 -26z" fill="#6E1010" stroke="' + INK + '" stroke-width="2"/>' +
+      '<path d="M' + (bx1 + 34) + ' ' + (by - 14) + 'h-60v52h60l-18 -26z" fill="#6E1010" stroke="' + INK + '" stroke-width="2"/>' +
+      '<path d="M' + bx0 + ' ' + (by - 24) + 'Q' + bn[0] + ' ' + (by - 38) + ' ' + bx1 + ' ' + (by - 24) + 'V' + (by + 26) + 'Q' + bn[0] + ' ' + (by + 12) + ' ' + bx0 + ' ' + (by + 26) + 'Z" fill="#A31C1B" stroke="' + INK + '" stroke-width="2.4"/>' +
+      '<text x="' + bn[0] + '" y="' + (by + 9) + '" text-anchor="middle" class="tm-title" font-size="' + (portrait ? 32 : 34) + '">The Road to Elysium</text></g>');
+
+    var sp = portrait ? [300, 590] : [420, 575];
+    o.push('<g transform="translate(' + sp[0] + ' ' + sp[1] + ')" stroke="' + INK + '" stroke-width="3" fill="none" stroke-linecap="round">' +
+      '<path d="M0 0q14 -26 28 0M40 0q14 -30 28 0M80 0q12 -22 24 0"/>' +
+      '<path d="M104 0q10 -30 26 -28q12 2 8 14" />' +
+      '<circle cx="130" cy="-24" r="2.2" fill="' + INK + '" stroke="none"/>' +
+      '<path d="M-8 4q24 6 48 0q24 6 48 0q24 6 44 0" stroke-opacity=".4" stroke-width="2"/></g>');
+    o.push('<text x="' + (sp[0] + 60) + '" y="' + (sp[1] + (portrait ? -42 : 34)) + '" text-anchor="middle" class="tm-small" font-size="17">here be bears</text>');
+
+    var last = P[4];
+    o.push('<circle cx="' + last[0] + '" cy="' + (last[1] - 70) + '" r="70" fill="url(#tmGold)" opacity=".7"/>');
+    o.push('<g transform="translate(' + last[0] + ' ' + (last[1] - 64) + ')">' +
+      '<rect x="-26" y="-6" width="52" height="30" rx="3" fill="#7A4A1E" stroke="' + INK + '" stroke-width="2.4"/>' +
+      '<path d="M-26 -6Q-26 -28 0 -28Q26 -28 26 -6Z" fill="#9A5E26" stroke="' + INK + '" stroke-width="2.4"/>' +
+      '<path d="M-26 6H26M-12 -27V24M12 -27V24" stroke="#E2B33C" stroke-width="3"/>' +
+      '<rect x="-5" y="0" width="10" height="11" rx="2" fill="#E2B33C" stroke="' + INK + '" stroke-width="1.5"/>' +
+      '<path class="glint" d="M-36 -30l3 -9 3 9 9 3 -9 3 -3 9 -3 -9 -9 -3z" fill="#FFE9A0"/>' +
+      '<path class="glint g2" d="M30 -38l2 -6 2 6 6 2 -6 2 -2 6 -2 -6 -6 -2z" fill="#FFE9A0"/>' +
+      '<path class="glint g3" d="M34 4l2 -6 2 6 6 2 -6 2 -2 6 -2 -6 -6 -2z" fill="#FFE9A0"/></g>');
+
+    P.forEach(function (p, i) {
+      var sc = i === 4 ? 1.35 : 1, cur = i === CURRENT_PHASE;
+      var g = '<g class="tm-x" data-i="' + i + '" transform="translate(' + p[0] + ' ' + p[1] + ')" tabindex="0" role="button" aria-label="' + ph[i].name + '">';
+      g += '<circle r="44" fill="transparent"/>';
+      if (cur) g += '<circle class="x-pulse" r="22" fill="none" stroke="#A31C1B" stroke-width="3"/>';
+      g += '<circle class="x-ring" r="34" fill="none" stroke="#A31C1B" stroke-width="2" stroke-dasharray="5 5" opacity="0"/>';
+      g += '<g transform="scale(' + sc + ')"><path d="M-16 -16L16 16M16 -16L-16 16" stroke="#4E0D0D" stroke-width="12" stroke-linecap="round" transform="translate(2 3)" opacity=".35"/>';
+      g += '<path class="x-lines" d="M-16 -16L16 16M16 -16L-16 16" stroke="#A31C1B" stroke-width="9" stroke-linecap="round"/></g>';
+      var ly = i === 4 ? 66 : 62, fs = portrait ? 30 : 27;
+      g += '<text y="' + ly + '" text-anchor="middle" class="tm-label" font-size="' + fs + '">' + ph[i].n + ' · ' + ph[i].name + '</text>';
+      var sub = cur ? 'you are here' : (i === 4 ? 'the treasure' : '');
+      if (sub) g += '<text y="' + (ly + 24) + '" text-anchor="middle" class="tm-small" font-size="' + (portrait ? 20 : 18) + '">' + sub + '</text>';
+      g += '</g>';
+      o.push(g);
+    });
+
+    o.push('<g id="tmShip"><g id="tmShipIn">' +
+      '<path d="M-24 0H24L16 11H-16Z" fill="#4A2E14" stroke="#2A1808" stroke-width="2"/>' +
+      '<path d="M0 0V-34" stroke="#2A1808" stroke-width="2.4"/>' +
+      '<path d="M2 -32Q22 -18 2 -4Z" fill="#F4E6C4" stroke="#2A1808" stroke-width="2"/>' +
+      '<path d="M-2 -30Q-18 -18 -2 -6Z" fill="#EAD7AE" stroke="#2A1808" stroke-width="2"/>' +
+      '<path d="M0 -34L12 -30L0 -26Z" fill="#A31C1B"/></g></g>');
+    o.push('<rect x="14" y="14" width="' + (W - 28) + '" height="' + (H - 28) + '" rx="10" fill="none" stroke="' + INK + '" stroke-width="2.2" stroke-opacity=".7"/>');
+    o.push('<rect x="22" y="22" width="' + (W - 44) + '" height="' + (H - 44) + '" rx="6" fill="none" stroke="' + INK + '" stroke-width="1" stroke-opacity=".5" stroke-dasharray="4 5"/>');
+    o.push('<rect width="' + W + '" height="' + H + '" fill="url(#tmBurn)" pointer-events="none"/>');
+    o.push('</svg>');
+    host.innerHTML = o.join('');
+
+    var trail = $('#tmTrail', host), done = $('#tmDone', host);
+    var total = trail.getTotalLength();
+    var seg = total / (P.length - 1);
+    var doneLen = CURRENT_PHASE * seg + seg * 0.45;
+    var dashes = [], used = 0;
+    while (used < doneLen) { dashes.push(Math.min(16, doneLen - used), 11); used += 27; }
+    dashes.push(0, total * 2);
+    done.style.strokeDasharray = dashes.join(' ');
+    mapSt.trail = { el: trail, total: total, end: Math.min(total, doneLen + seg * 0.15) };
+
+    $$('.tm-x', host).forEach(function (x) {
+      function pick() { selectPhase(Number(x.getAttribute('data-i'))); }
+      x.addEventListener('click', pick);
+      x.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+    });
+    selectPhase(mapSt.sel);
+    startShip();
+  }
+  function startShip() {
+    var ship = $('#tmShip'), inner = $('#tmShipIn');
+    if (!ship || !mapSt.trail) return;
+    cancelAnimationFrame(mapSt.raf);
+    var tr = mapSt.trail;
+    function place(len, now) {
+      var p = tr.el.getPointAtLength(len), q = tr.el.getPointAtLength(Math.min(tr.total, len + 4));
+      var flip = q.x < p.x ? -1 : 1, bob = reduced ? 0 : Math.sin(now / 420) * 2.5;
+      ship.setAttribute('transform', 'translate(' + f1(p.x) + ' ' + f1(p.y - 18 + bob) + ')');
+      inner.setAttribute('transform', 'scale(' + flip + ' 1) rotate(' + f1(Math.sin(now / 600) * 3) + ')');
+    }
+    if (reduced) { place(tr.end, 0); return; }
+    var DUR = 9000;
+    function frame(now) {
+      mapSt.raf = requestAnimationFrame(frame);
+      if (document.hidden) return;
+      var t = (now % (DUR * 2)) / DUR;
+      var k = t <= 1 ? t : 2 - t;
+      k = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      place(tr.end * k, now);
+    }
+    mapSt.raf = requestAnimationFrame(frame);
+  }
+  function selectPhase(i) {
+    mapSt.sel = i;
+    var ph = phases()[i], box = $('#tmDetail');
+    $$('.tm-x').forEach(function (x) { x.classList.toggle('sel', Number(x.getAttribute('data-i')) === i); });
+    if (!box) return;
+    box.textContent = '';
+    var tabs = el('div', 'tm-tabs');
+    phases().forEach(function (p, k) {
+      var b = el('button', 'tm-tab' + (k === i ? ' sel' : '') + (k === CURRENT_PHASE ? ' cur' : ''), p.n);
+      b.type = 'button'; b.setAttribute('aria-label', p.name);
+      b.addEventListener('click', function () { selectPhase(k); });
+      tabs.appendChild(b);
+    });
+    box.appendChild(tabs);
+    var st = i === CURRENT_PHASE ? ['pill pill-red tm-status', 'LIVE NOW'] : (i === 4 ? ['pill pill-hyper tm-status', 'THE TREASURE'] : ['pill pill-soft tm-status', i < CURRENT_PHASE ? 'COMPLETE' : 'UPCOMING']);
+    var pill = el('span', st[0]);
+    if (i === CURRENT_PHASE) pill.appendChild(el('span', 'pulse-dot'));
+    pill.appendChild(document.createTextNode(st[1]));
+    box.appendChild(pill);
+    box.appendChild(el('h3', 'tm-name', ph.n + ' · ' + ph.name));
+    box.appendChild(el('p', 'tm-place', ph.place));
+    box.appendChild(el('p', 'tm-text', ph.text));
+    var ul = el('ul', 'tm-list');
+    ph.items.forEach(function (t) { ul.appendChild(el('li', null, t)); });
+    box.appendChild(ul);
+    box.appendChild(el('p', 'tm-foot mono', 'Tap any X on the map to explore that stop.'));
   }
 
   /* ---------- launchpad ---------- */
@@ -712,6 +904,7 @@
       $('#wlResult').hidden = false;
       $('#refCode').textContent = WL.applicantId || 'EF-00000';
       drawCard();
+      unlockVault(false);
     } else { $('#wlResult').hidden = true; }
   }
 
@@ -749,6 +942,56 @@
       input.focus();
       log('could not read clipboard. long-press the box and tap Paste.', 'err');
     }
+  }
+
+  var vaultOpen = false;
+  function isUnlocked() { return WL.step >= 5 || !!store.get('ef_unlocked'); }
+  function unlockVault(announce) {
+    if (vaultOpen) return;
+    vaultOpen = true;
+    document.body.classList.add('unlocked');
+    var lk = $('#locked'), v = $('#vault');
+    if (lk) lk.hidden = true;
+    if (v) v.hidden = false;
+    $$('.gated').forEach(function (a) { a.hidden = false; });
+    $$('.nl-lock').forEach(function (e) { e.textContent = 'open'; });
+    $$('.lock-link').forEach(function (a) { a.setAttribute('href', '#vault'); });
+    requestAnimationFrame(function () { buildMap(true); });
+    if (announce) {
+      var vo = $('#vaultOpen');
+      if (vo) { vo.classList.add('unlock-flash'); }
+    }
+  }
+  function restoreAccess() {
+    var inp = $('#inRestore'), out = $('#restoreOut'), btn = $('#btnRestore');
+    if (!inp) return;
+    async function go() {
+      var u = parseUsername(inp.value);
+      out.className = 'restore-out mono';
+      if (!u) { out.classList.add('err'); out.textContent = 'Enter a valid X username.'; return; }
+      btn.classList.add('busy');
+      out.textContent = '> checking @' + u + ' ...';
+      var res = null;
+      if (DEMO) { await sleep(700); res = { ok: true, status: 'PENDING' }; }
+      else {
+        try { var r = await fetch(C.SCRIPT_URL + '?action=check&u=' + encodeURIComponent(u), { redirect: 'follow' }); res = await r.json(); }
+        catch (e) { res = { ok: false }; }
+      }
+      btn.classList.remove('busy');
+      if (!res || !res.ok) { out.classList.add('err'); out.textContent = 'Could not check right now. Try again.'; return; }
+      if (res.status === 'PENDING' || res.status === 'GTD' || res.status === 'FCFS') {
+        store.set('ef_unlocked', u);
+        out.classList.add('ok'); out.textContent = 'Access restored for @' + u + '.';
+        unlockVault(true);
+        setTimeout(function () { var v = $('#vault'); if (v) v.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }); }, 200);
+      } else if (res.status === 'IN_PROGRESS') {
+        out.classList.add('err'); out.textContent = '@' + u + ' has not finished all tasks yet.';
+      } else {
+        out.classList.add('err'); out.textContent = '@' + u + ' is not on the list. Complete the tasks first.';
+      }
+    }
+    btn.addEventListener('click', go);
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
   }
 
   function whitelist() {
@@ -816,7 +1059,9 @@
         if (!resp || !resp.ok) { log('error: ' + ((resp && resp.error) || 'unknown error'), 'err'); return; }
         WL.wallet = w;
         log('entry saved. applicant id ' + (resp.applicantId || WL.applicantId) + '.', 'ok');
+        log('vault unlocked. roadmap, tokenomics and launchpad are open.', 'ok');
         applyResp(resp, 5);
+        unlockVault(true);
         setTimeout(function () { $('#wlResult').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }); }, 250);
       });
     });
@@ -838,8 +1083,9 @@
       WL = { step: 1, username: '', opened: {}, comment: '', wallet: '', applicantId: '' };
       $('#inUser').value = ''; $('#inComment').value = ''; $('#inWallet').value = '';
       logEl.textContent = '';
-      log('session cleared. start from task 01.', 'cmd');
-      render();
+      store.del('ef_unlocked');
+      location.hash = '';
+      location.reload();
     });
     log(WL.step >= 5 ? 'welcome back. your card is ready.' : 'whitelist terminal ready. complete each task in order.', 'cmd');
     render();
@@ -977,6 +1223,7 @@
       { k: ['x', 'twitter', 'contact', 'social', 'follow', 'support'], a: 'Our official X account is ' + hx + '. Follow it for every update and announcement.' }
     ];
   }
+  var SECRET = ['tokenomics', 'allocation', 'distribution', 'split', 'percent', 'share', 'roadmap', 'phase', 'plan', 'next', 'steps', 'team', 'founder', 'dev', 'vault', 'marketing', 'liquidity', 'lp', 'pool'];
   function localAnswer(q) {
     var words = q.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
     var best = null, score = 0;
@@ -986,7 +1233,12 @@
       if (i === 1) s -= 1;
       if (s > score) { score = s; best = e; }
     });
-    if (best && score > 0) return best.a;
+    if (best && score > 0) {
+      if (!isUnlocked() && best.k.some(function (k) { return SECRET.indexOf(k) !== -1; })) {
+        return 'That is inside the ElyFluff vault. Complete the 4 whitelist tasks to unlock the tokenomics, the treasure map roadmap and the testnet launchpad.';
+      }
+      return best.a;
+    }
     return 'I can help with ElyFluff details: the whitelist, GTD and FCFS, the testnet mint, tokenomics and the roadmap. For anything else, follow @' + handle() + ' on X.';
   }
   function agent() {
@@ -1013,7 +1265,7 @@
       t.appendChild(ty); msgs.appendChild(t); msgs.scrollTop = msgs.scrollHeight;
       var answer = null;
       if (C.AGENT_AI && !DEMO) {
-        var r = await api('ask', { q: q, sid: sid });
+        var r = await api('ask', { q: q, sid: sid, unlocked: isUnlocked() });
         if (r && r.ok && r.answer) answer = String(r.answer).slice(0, 1500);
       } else { await sleep(500 + Math.random() * 400); }
       if (!answer) answer = localAnswer(q);
@@ -1049,13 +1301,14 @@
     tokenomics();
     scanner();
     launchpad();
+    restoreAccess();
     whitelist();
+    if (isUnlocked()) unlockVault(false);
     liveStats();
     agent();
     reveal();
     var rt;
-    window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(drawMap, 150); });
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { setTimeout(drawMap, 100); });
+    window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { buildMap(false); }, 150); });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
