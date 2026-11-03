@@ -56,140 +56,617 @@
 
   /* ---------- config text ---------- */
   function fillConfig() {
-    var map = {
-      TICKER: TICKER,
-      NFT_SUPPLY_FMT: fmt(SUPPLY),
-      TOKEN_SUPPLY: C.TOKEN_SUPPLY || 'TBA',
-      X_HANDLE_AT: '@' + handle(),
-      GTD_MINT_PRICE: C.GTD_MINT_PRICE || '0.33 HYPE'
-    };
-    $$('[data-cfg]').forEach(function (e) {
-      var v = map[e.getAttribute('data-cfg')];
-      if (v != null) e.textContent = v;
+    var map = { TICKER: TICKER, NFT_SUPPLY_FMT: fmt(SUPPLY), TOKEN_SUPPLY: C.TOKEN_SUPPLY || 'TBA', X_HANDLE_AT: '@' + handle(), GTD_MINT_PRICE: C.GTD_MINT_PRICE || '0.33 HYPE' };
+    $$('[data-cfg]').forEach(function (e) { var v = map[e.getAttribute('data-cfg')]; if (v != null) e.textContent = v; });
+    $$('[data-x-profile]').forEach(function (a) { a.href = 'https://x.com/' + encodeURIComponent(handle()); });
+    var t = $('.title');
+    if (t) { t.textContent = ''; t.appendChild(document.createTextNode('Ely')); t.appendChild(el('span', 't2', 'Fluff')); }
+    var av = $('#avatar');
+    if (av) { var ac = av.getContext('2d'); ac.imageSmoothingEnabled = false; drawFluff(ac, av.width, 4242); }
+  }
+
+  /* ---------- state ---------- */
+  var WL_KEY = 'ef_term_v1';
+  var EMPTY = function () { return { username: '', done: { follow: false, like: false, repost: false, comment: false }, opened: {}, comment: '', wallet: '', applicantId: '', complete: false }; };
+  var WL = Object.assign(EMPTY(), store.get(WL_KEY) || {});
+  WL.done = Object.assign(EMPTY().done, WL.done || {});
+  WL.opened = WL.opened || {};
+  function save() { store.set(WL_KEY, WL); }
+  function isUnlocked() { return !!WL.complete; }
+  var USER_RE = /^[A-Za-z0-9_]{1,15}$/;
+  var WALLET_RE = /^0x[a-fA-F0-9]{40}$/;
+  var REPLY_RE = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})\/status\/(\d{5,25})(?:[/?#].*)?$/i;
+  var REF_RE = /^EF-\d{5}$/;
+  function postId() { var m = String(C.TASK_POST_URL || '').match(/status\/(\d+)/); return m ? m[1] : ''; }
+  function parseUsername(v) {
+    v = String(v || '').trim();
+    var m = v.match(/(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})/i);
+    if (m) v = m[1];
+    v = v.replace(/^@+/, '');
+    return USER_RE.test(v) ? v : '';
+  }
+  function siteBase() { var s = String(C.SITE_URL || '').replace(/\/+$/, ''); return s || (location.origin + location.pathname).replace(/\/index\.html$/, '').replace(/\/+$/, ''); }
+  function refLink() { return siteBase() + '/?ref=' + encodeURIComponent(WL.applicantId || ''); }
+  (function captureRef() {
+    try { var r = new URLSearchParams(location.search).get('ref'); if (r && REF_RE.test(r.toUpperCase())) store.set('ef_ref', r.toUpperCase()); } catch (e) {}
+  })();
+
+  /* ---------- api ---------- */
+  async function api(action, data) {
+    var body = Object.assign({ action: action }, data);
+    if (DEMO) {
+      await sleep(700);
+      if (action === 'ask') return { ok: false };
+      var steps = { follow: 2, engage: 3, comment: 4, wallet: 5 };
+      return { ok: true, step: steps[action], applicantId: WL.applicantId || ('EF-' + pad(1 + Math.floor(Math.random() * 999), 5)) };
+    }
+    var ctrl = new AbortController(), to = setTimeout(function () { ctrl.abort(); }, 20000);
+    try {
+      var res = await fetch(C.SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body), signal: ctrl.signal, redirect: 'follow' });
+      return await res.json();
+    } catch (e) { return { ok: false, error: 'network error, try again' }; }
+    finally { clearTimeout(to); }
+  }
+  async function apiGet(params) {
+    if (DEMO) return null;
+    try { var r = await fetch(C.SCRIPT_URL + '?' + params, { redirect: 'follow' }); return await r.json(); } catch (e) { return null; }
+  }
+
+  /* ---------- terminal output ---------- */
+  var OUT, SCREEN, PROMPT, FAST = false;
+  function scrollEnd() { if (SCREEN) SCREEN.scrollTop = SCREEN.scrollHeight; }
+  function line(parts, cls) {
+    var d = el('div', 'ln' + (cls ? ' ' + cls : ''));
+    if (typeof parts === 'string') d.textContent = parts;
+    else parts.forEach(function (p) { if (typeof p === 'string') d.appendChild(document.createTextNode(p)); else d.appendChild(el('span', p[0], p[1])); });
+    OUT.appendChild(d); scrollEnd();
+    return d;
+  }
+  function gap() { OUT.appendChild(el('div', 'ln gap')); }
+  async function typeLine(text, cls, speed) {
+    if (FAST || reduced) return line(text, cls);
+    var d = line('', cls);
+    for (var i = 1; i <= text.length; i++) { d.textContent = text.slice(0, i); if (i % 3 === 0) scrollEnd(); await sleep(speed || 16); }
+    scrollEnd();
+    return d;
+  }
+  function pause(ms) { return FAST || reduced ? Promise.resolve() : sleep(ms); }
+  var SPIN = ['|', '/', '-', '\\'];
+  function spinner(node, label) {
+    var i = 0, sp = el('span', 'spin'), tx = document.createTextNode(' ' + label);
+    node.textContent = ''; node.appendChild(sp); node.appendChild(tx);
+    var t = setInterval(function () { sp.textContent = SPIN[i++ % 4]; }, 110);
+    sp.textContent = SPIN[0];
+    return function () { clearInterval(t); };
+  }
+  function win(title, cls) {
+    var w = el('div', 'win' + (cls ? ' ' + cls : ''));
+    var b = el('div', 'win-bar');
+    var dots = el('span', 'dots'); dots.appendChild(el('i', 'd1')); dots.appendChild(el('i')); dots.appendChild(el('i'));
+    b.appendChild(dots); b.appendChild(el('span', 'win-title', title)); b.appendChild(el('span'));
+    var body = el('div', 'win-body');
+    w.appendChild(b); w.appendChild(body);
+    OUT.appendChild(w); scrollEnd();
+    return body;
+  }
+  function button(label, cls, fn) { var b = el('button', 'btn' + (cls ? ' ' + cls : ''), label); b.type = 'button'; if (fn) b.addEventListener('click', fn); return b; }
+  function ask(ps, placeholder, opts) {
+    opts = opts || {};
+    return new Promise(function (res) {
+      PROMPT.textContent = '';
+      var row = el('div', 'prompt-row');
+      row.appendChild(el('span', 'ps', ps));
+      var pin = el('label', 'pin'), inp = el('input');
+      inp.type = 'text'; inp.placeholder = placeholder || ''; inp.autocomplete = 'off'; inp.spellcheck = false;
+      inp.setAttribute('autocapitalize', 'off'); inp.setAttribute('autocorrect', 'off'); inp.maxLength = opts.max || 80;
+      inp.setAttribute('aria-label', placeholder || 'input');
+      pin.appendChild(inp); row.appendChild(pin);
+      if (opts.paste) row.appendChild(button('paste', 'btn-sm btn-ghost', async function () {
+        try { var t = await navigator.clipboard.readText(); if (t) inp.value = t.trim(); } catch (e) { inp.focus(); }
+      }));
+      function go() { var v = inp.value.trim(); if (!v) { inp.focus(); return; } PROMPT.textContent = ''; res(v); }
+      row.appendChild(button('enter ↵', 'btn-sm', go));
+      inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+      PROMPT.appendChild(row); scrollEnd();
+      if (window.innerWidth > 760) setTimeout(function () { inp.focus({ preventScroll: true }); }, 60);
     });
-    $$('[data-x-profile]').forEach(function (b) {
-      b.addEventListener('click', function () { openUrl('https://x.com/' + encodeURIComponent(handle())); });
-    });
   }
 
-  /* ---------- nav ---------- */
-  function nav() {
-    var btn = $('#menuBtn'), links = $('#navLinks');
-    if (!btn) return;
-    function set(open) { links.classList.toggle('open', open); btn.setAttribute('aria-expanded', open ? 'true' : 'false'); }
-    btn.addEventListener('click', function () { set(!links.classList.contains('open')); });
-    $$('a', links).forEach(function (a) { a.addEventListener('click', function () { set(false); }); });
-    document.addEventListener('click', function (e) { if (!links.contains(e.target) && !btn.contains(e.target)) set(false); });
-    var track = $('#livebarTrack');
-    if (track) track.innerHTML += track.innerHTML;
-  }
-
-  /* ---------- hero terminal ---------- */
-  function heroTerm() {
-    var box = $('#heroTerm');
-    if (!box) return;
-    function cd() {
-      var t = timeLeft();
-      if (!t) return 'Nov 9';
-      if (t.live) return 'LIVE';
-      return 'live in ' + t.d + 'd ' + pad(t.h, 2) + 'h ' + pad(t.m, 2) + 'm';
-    }
-    var script = [
-      { cmd: 'elyfluff status', out: [
-        [['k', 'network   '], ['v', 'HyperEVM Testnet  ->  Elysium']],
-        [['k', 'supply    '], ['v', fmt(SUPPLY) + ' NFTs']],
-        [['k', 'token     '], ['v', TICKER], ['k', '  (supply ' + (C.TOKEN_SUPPLY || 'TBA') + ')']],
-        [['k', 'whitelist '], ['ok', 'OPEN']]
-      ] },
-      { cmd: 'elyfluff mint --tier gtd', out: [
-        [['k', 'price     '], ['v', (C.GTD_MINT_PRICE || '0.33 HYPE') + ' (testnet)']],
-        [['k', 'status    '], ['s', C.MINT_LIVE ? 'LIVE' : 'opens after selection']]
-      ] },
-      { cmd: 'elyfluff mainnet', out: function () { return [[['k', 'elysium   '], ['ok', cd()]]]; } },
-      { cmd: 'elyfluff tokenomics', locked: true, out: [
-        [['k', 'nft holders  '], ['v', '40%'], ['k', '   token holders '], ['v', '20%']],
-        [['k', 'active users '], ['v', '15%'], ['k', '   liquidity     '], ['v', '15%']]
-      ] }
-    ];
-    function line(segs) {
-      var d = el('div', 'tl');
-      segs.forEach(function (s) { d.appendChild(el('span', s[0], s[1])); });
-      box.appendChild(d);
-      while (box.children.length > 9) box.removeChild(box.firstChild);
-      return d;
-    }
-    if (reduced) {
-      script.slice(0, 2).forEach(function (s) {
-        line([['pr', '~ $ '], ['cm', s.cmd]]);
-        (typeof s.out === 'function' ? s.out() : s.out).forEach(line);
-      });
-      return;
-    }
-    (async function loop() {
-      var i = 0;
-      while (true) {
-        var s = script[i++ % script.length];
-        if (s.locked && !isUnlocked()) { s = { cmd: 'cat ./vault', out: [[['k', 'access    '], ['pr', 'LOCKED'], ['k', '  complete 4 tasks to unlock']]] }; }
-        var d = line([['pr', '~ $ '], ['cm', '']]);
-        var cm = d.lastChild, caret = el('span', 'caret');
-        d.appendChild(caret);
-        for (var k = 1; k <= s.cmd.length; k++) { cm.textContent = s.cmd.slice(0, k); await sleep(45 + Math.random() * 40); }
-        await sleep(280);
-        caret.remove();
-        var out = typeof s.out === 'function' ? s.out() : s.out;
-        for (var j = 0; j < out.length; j++) { line(out[j]); await sleep(110); }
-        await sleep(2200);
-      }
-    })();
-  }
-
-  /* ---------- countdown ---------- */
-  function countdown() {
-    var m = $('#mCountdown');
-    function tick() {
-      var t = timeLeft();
-      if (!t) return;
+  /* ---------- live values ---------- */
+  function liveValues() {
+    function cdTick() {
+      var t = timeLeft(); if (!t) return;
       var txt = t.live ? 'LIVE' : t.d + 'd ' + pad(t.h, 2) + 'h ' + pad(t.m, 2) + 'm ' + pad(t.s, 2) + 's';
-      if (m) m.textContent = txt;
-      $$('.lb-cd').forEach(function (e) { e.textContent = t.live ? 'LIVE' : t.d + 'D ' + pad(t.h, 2) + 'H ' + pad(t.m, 2) + 'M'; });
+      $$('.cdv').forEach(function (e) { e.textContent = txt; });
     }
-    tick();
-    setInterval(tick, 1000);
-  }
+    cdTick(); setInterval(cdTick, 1000);
 
-  /* ---------- live HyperEVM testnet block ---------- */
-  function blockFeed() {
-    var url = C.HYPEREVM_TESTNET_RPC, fails = 0, last = 0, timer;
-    var mB = $('#mBlock'), mS = $('#mBlockSub');
-    if (!url) { if (mB) mB.textContent = 'Online'; return; }
-    async function poll() {
+    var url = C.HYPEREVM_TESTNET_RPC, last = 0, fails = 0, timer;
+    async function blk() {
       try {
-        var ctrl = new AbortController(); var to = setTimeout(function () { ctrl.abort(); }, 6000);
+        var ctrl = new AbortController(), to = setTimeout(function () { ctrl.abort(); }, 6000);
         var r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}', signal: ctrl.signal });
         clearTimeout(to);
-        var j = await r.json();
-        var n = parseInt(j.result, 16);
-        if (!isFinite(n)) throw new Error('bad');
+        var n = parseInt((await r.json()).result, 16);
+        if (!isFinite(n)) throw 0;
         fails = 0;
-        if (n !== last) {
-          last = n;
-          mB.textContent = '#' + fmt(n);
-          mB.classList.remove('tick'); void mB.offsetWidth; mB.classList.add('tick');
-          mS.textContent = 'Latest block · live';
-          $$('.lb-block-n').forEach(function (e) { e.textContent = '#' + fmt(n); });
-          $$('.lb-block').forEach(function (e) { e.hidden = false; });
-        }
+        if (n !== last) { last = n; $$('.blk').forEach(function (e) { e.textContent = '#' + fmt(n); e.classList.remove('tick'); void e.offsetWidth; e.classList.add('tick'); }); }
       } catch (e) {
-        fails++;
-        if (!last) { mB.textContent = 'Testnet'; mS.textContent = 'Network for the test launch'; }
-        if (fails > 3) { clearInterval(timer); }
+        if (++fails > 2) { clearInterval(timer); if (!last) $$('.blk').forEach(function (e) { e.textContent = 'online'; }); }
       }
     }
-    poll();
-    timer = setInterval(function () { if (!document.hidden) poll(); }, 4000);
+    if (url) { blk(); timer = setInterval(function () { if (!document.hidden) blk(); }, 4000); }
+    else $$('.blk').forEach(function (e) { e.textContent = 'online'; });
+
+    async function stats() {
+      var j = await apiGet('action=stats');
+      if (!j || !j.ok) return;
+      var n = Number(j.count) || 0;
+      $$('.apps').forEach(function (e) {
+        var v = n > 0 ? fmt(n) + ' whitelisted' : 'be the first';
+        if (e.textContent !== v) { e.textContent = v; e.classList.remove('tick'); void e.offsetWidth; e.classList.add('tick'); }
+      });
+      renderFeed(j);
+    }
+    if (!DEMO) { stats(); setInterval(function () { if (!document.hidden) stats(); }, 20000); }
+    else $$('.apps').forEach(function (e) { e.textContent = 'demo mode'; });
   }
 
-  /* ---------- procedural fluff (preview art) ---------- */
+  /* ---------- boot ---------- */
+  async function boot() {
+    await typeLine('$ ./whitelist --project elyfluff', null, 24);
+    await pause(250);
+    line('[boot] loading whitelist protocol... done', 'dim'); await pause(150);
+    line('[boot] network: hyperevm testnet → elysium mainnet', 'dim'); await pause(150);
+    line([['dim', '[boot] hyperevm testnet block: '], ['live-v blk', 'syncing...']]); await pause(150);
+    line([['dim', '[boot] elysium mainnet in: '], ['live-v cdv', '--']]); await pause(150);
+    line([['dim', '[boot] applicants: '], ['live-v apps', '--']]); await pause(150);
+    line([['dim', '[boot] status: '], ['hl', TICKER + ' WHITELIST OPEN']]);
+    gap();
+    await typeLine('$ ./scan --collection elyfluff --live', null, 18);
+    scanWindow();
+    gap();
+    if (!WL.complete) {
+      line([['dim', '[vault] project files are encrypted. complete the tasks to decrypt.']]);
+      var v = el('div', 'vault-locked');
+      [['about.txt'], ['tokenomics.cfg'], ['launchpad.sh'], ['treasure_map.png'], ['live_feed.log']].forEach(function (f) {
+        var r = el('div', 'f'); r.appendChild(el('span', null, f[0])); r.appendChild(el('span', null, '[locked]')); v.appendChild(r);
+      });
+      OUT.appendChild(v);
+      gap();
+    }
+  }
+  function scanWindow() {
+    var body = win('elyfluff@scan: ~/collection/live', 'teal');
+    var g = el('div', 'scan');
+    var stage = el('div', 'scan-stage');
+    var cv = el('canvas'); cv.id = 'specimen'; cv.width = 480; cv.height = 480; cv.setAttribute('aria-label', 'Live preview of ElyFluff NFTs');
+    var tag = el('div', 'scan-tag', 'SCANNING'); tag.id = 'scanTag';
+    stage.appendChild(cv); stage.appendChild(tag);
+    var info = el('div');
+    var top = el('div', 'si-top');
+    var id = el('span', 'si-id', '#0000'); id.id = 'roId';
+    top.appendChild(id); top.appendChild(el('span', 'dim', '/ ' + fmt(SUPPLY)));
+    var cnt = el('span', 'si-count'); cnt.appendChild(document.createTextNode('scanned ')); var cb = el('b', null, '0'); cb.id = 'roCount'; cnt.appendChild(cb);
+    top.appendChild(cnt);
+    var bar = el('div', 'si-bar'), fill = el('div', 'si-fill'); fill.id = 'roFill'; bar.appendChild(fill);
+    var ul = el('ul', 'si-traits'); ul.id = 'roTraits';
+    var sig = el('div', 'si-sig', 'sig 0x0000000000000000'); sig.id = 'roSig';
+    info.appendChild(top); info.appendChild(bar); info.appendChild(ul); info.appendChild(sig);
+    g.appendChild(stage); g.appendChild(info);
+    body.appendChild(g);
+    scanner();
+  }
+
+  /* ---------- identify ---------- */
+  async function identify() {
+    line('? identify yourself. enter your X username.');
+    if (WL.username) {
+      line([['ps', 'x_user@elyfluff:~$ '], WL.username]);
+    } else {
+      while (true) {
+        var v = await ask('x_user@elyfluff:~$', 'username', { max: 60 });
+        line([['ps', 'x_user@elyfluff:~$ '], v]);
+        var u = parseUsername(v);
+        if (u) { WL.username = u; save(); break; }
+        line('✗ invalid username. use letters, numbers or _ (max 15).', 'err');
+      }
+    }
+    if (!WL.complete && !DEMO) {
+      var c = await apiGet('action=check&u=' + encodeURIComponent(WL.username));
+      if (c && c.ok && (c.status === 'PENDING' || c.status === 'GTD' || c.status === 'FCFS')) {
+        WL.complete = true; WL.done = { follow: true, like: true, repost: true, comment: true };
+        if (c.id) WL.applicantId = c.id;
+        if (c.wallet) WL.wallet = c.wallet;
+        save();
+        FAST = true;
+      }
+    }
+    var w = line([['ok', '✓ welcome' + (WL.complete ? ' back' : '') + ', @' + WL.username + '  ']]);
+    var reset = el('button', 'btn btn-sm btn-ghost', 'not you? reset');
+    reset.type = 'button';
+    reset.addEventListener('click', function () { store.del(WL_KEY); location.reload(); });
+    w.appendChild(reset);
+    gap();
+  }
+
+  /* ---------- tasks ---------- */
+  function tasksStage() {
+    return new Promise(function (resolve) {
+      var pid = postId(), h = handle();
+      line('? complete 4 tasks to join the whitelist.');
+      var defs = [
+        { k: 'follow', h: 'Follow @' + h, d: 'follow the official account', ok: 'follow complete', url: 'https://x.com/intent/follow?screen_name=' + encodeURIComponent(h) },
+        { k: 'like', h: 'Like the post', d: 'like the ' + TICKER + ' post', ok: 'like complete', url: 'https://x.com/intent/like?tweet_id=' + pid },
+        { k: 'repost', h: 'Repost the post', d: 'repost the ' + TICKER + ' post', ok: 'repost complete', url: 'https://x.com/intent/retweet?tweet_id=' + pid },
+        { k: 'comment', h: 'Comment on the post', d: 'reply with anything, then paste your reply link here', ok: 'comment complete', url: 'https://x.com/intent/tweet?in_reply_to=' + pid }
+      ];
+      var wrap = el('div', 'tasks'); OUT.appendChild(wrap);
+      var busyK = {}, errK = {}, boxes = {}, finished = false;
+      defs.forEach(function (d, i) {
+        var b = el('div', 'task'); b.setAttribute('role', 'button'); b.tabIndex = 0;
+        var hh = el('div', 't-h'); hh.appendChild(el('em', null, '[0' + (i + 1) + '/04] ')); hh.appendChild(document.createTextNode(d.h));
+        b.appendChild(hh); b.appendChild(el('div', 't-d', d.d));
+        var st = el('span', 't-s'); b.appendChild(st);
+        d.st = st; d.box = b; d.i = i; boxes[d.k] = d;
+        b.addEventListener('click', function (e) { if (e.target.closest('.task-extra')) return; tap(d); });
+        b.addEventListener('keydown', function (e) { if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('.task-extra')) { e.preventDefault(); tap(d); } });
+        wrap.appendChild(b);
+      });
+      function prevDone(d) { return d.i === 0 || WL.done[defs[d.i - 1].k]; }
+      function state(d) {
+        if (WL.done[d.k]) return 'done';
+        if (!prevDone(d)) return 'locked';
+        if (busyK[d.k]) return 'busy';
+        if (WL.opened[d.k]) return 'wait';
+        return 'idle';
+      }
+      function refresh() {
+        defs.forEach(function (d) {
+          var s = state(d), b = d.box;
+          b.classList.toggle('done', s === 'done'); b.classList.toggle('locked', s === 'locked'); b.classList.toggle('wait', s === 'wait' || s === 'busy');
+          if (s !== 'busy') {
+            d.st.className = 't-s';
+            if (s === 'done') d.st.textContent = '✓ ' + d.ok;
+            else if (s === 'locked') d.st.textContent = '[locked] finish task 0' + d.i + ' first';
+            else if (s === 'wait') d.st.textContent = errK[d.k] ? '✗ ' + errK[d.k] + ' · tap to try again' : (d.k === 'comment' ? '→ paste your reply link below' : '… finish on X, then come back here');
+            else { d.st.textContent = ''; d.st.appendChild(el('span', 'go', '→ tap to open X')); }
+          }
+          if (d.k === 'comment') commentExtra(d, s);
+          b.setAttribute('aria-disabled', s === 'locked' || s === 'done' ? 'true' : 'false');
+        });
+        if (!finished && defs.every(function (d) { return WL.done[d.k]; })) {
+          finished = true;
+          line('✓ all tasks complete', 'ok');
+          resolve();
+        }
+      }
+      function tap(d) {
+        var s = state(d);
+        if (s === 'locked' || s === 'done' || s === 'busy') return;
+        if (s === 'wait' && errK[d.k] && d.k !== 'comment') { verify(d); return; }
+        openUrl(d.url);
+        WL.opened[d.k] = Date.now(); errK[d.k] = ''; save();
+        refresh();
+      }
+      async function verify(d, extra) {
+        busyK[d.k] = true; errK[d.k] = ''; refresh();
+        var stop = spinner(d.st, 'verifying ' + d.k + '...');
+        var resp = { ok: true };
+        await sleep(FAST ? 0 : 900);
+        if (d.k === 'follow') {
+          resp = await api('follow', { username: WL.username, ref: store.get('ef_ref') || '' });
+          if (resp && resp.ok) {
+            if (resp.applicantId) WL.applicantId = resp.applicantId;
+            if (resp.step > 2) { WL.done.like = true; WL.done.repost = true; }
+            if (resp.step > 3) WL.done.comment = true;
+            if (resp.step >= 5) { WL.complete = true; if (resp.wallet) WL.wallet = resp.wallet; }
+          }
+        } else if (d.k === 'repost') {
+          for (var tries = 0; tries < 3; tries++) {
+            resp = await api('engage', { username: WL.username });
+            if (resp && resp.ok) break;
+            if (!(resp && /too fast/i.test(resp.error || ''))) break;
+            await sleep(3000);
+          }
+        } else if (d.k === 'comment') {
+          resp = await api('comment', { username: WL.username, commentUrl: extra });
+          if (resp && resp.ok) WL.comment = extra;
+        }
+        stop();
+        busyK[d.k] = false;
+        if (resp && resp.ok) { WL.done[d.k] = true; save(); }
+        else { errK[d.k] = (resp && resp.error ? String(resp.error).toLowerCase().replace(/\.$/, '') : 'could not verify'); }
+        refresh();
+      }
+      function commentExtra(d, s) {
+        var ex = d.box.querySelector('.task-extra');
+        if (s !== 'wait') { if (ex) ex.remove(); return; }
+        if (ex) return;
+        ex = el('div', 'task-extra');
+        ex.appendChild(el('div', 'dim', 'on X: tap share on your reply → copy link → paste here'));
+        var row = el('div', 'inrow');
+        var box = el('label', 'inbox'), inp = el('input');
+        inp.type = 'url'; inp.placeholder = 'https://x.com/you/status/...'; inp.autocomplete = 'off'; inp.setAttribute('autocapitalize', 'off'); inp.spellcheck = false; inp.maxLength = 200;
+        inp.setAttribute('aria-label', 'Your reply link');
+        box.appendChild(inp); row.appendChild(box);
+        row.appendChild(button('paste', 'btn-sm btn-ghost', async function () { try { var t = await navigator.clipboard.readText(); if (t) inp.value = t.trim(); } catch (e) { inp.focus(); } }));
+        row.appendChild(button('verify ↵', 'btn-sm', submit));
+        row.appendChild(button('open X ↗', 'btn-sm btn-ghost', function () { openUrl(d.url); WL.opened.comment = Date.now(); save(); }));
+        inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+        ex.appendChild(row);
+        d.box.appendChild(ex);
+        function submit() {
+          var m = String(inp.value || '').trim().match(REPLY_RE);
+          if (!m) { errK.comment = 'paste the link of your reply'; refresh(); return; }
+          if (m[1].toLowerCase() !== WL.username.toLowerCase()) { errK.comment = 'this reply is not from @' + WL.username; refresh(); return; }
+          if (m[2] === postId()) { errK.comment = 'that is our post, paste your own reply'; refresh(); return; }
+          var left = Math.ceil(MIN_SEC - (Date.now() - (WL.opened.comment || 0)) / 1000);
+          if (left > 0) { errK.comment = 'finish on X first, try again in ' + left + 's'; refresh(); return; }
+          verify(d, 'https://x.com/' + m[1] + '/status/' + m[2]);
+        }
+      }
+      function autoCheck() {
+        if (finished) return;
+        defs.forEach(function (d) {
+          if (d.k === 'comment' || state(d) !== 'wait' || errK[d.k]) return;
+          if (Date.now() - (WL.opened[d.k] || 0) >= MIN_SEC * 1000) verify(d);
+        });
+      }
+      var iv = setInterval(function () { if (finished) { clearInterval(iv); return; } if (!document.hidden) autoCheck(); }, 1200);
+      document.addEventListener('visibilitychange', function () { if (!document.hidden) setTimeout(autoCheck, 400); });
+      refresh();
+    });
+  }
+
+  /* ---------- wallet ---------- */
+  async function walletStage() {
+    gap();
+    line('? enter your EVM wallet address for HyperEVM testnet (starts with 0x).');
+    if (WL.complete && WL.wallet) { line([['ps', 'wallet@elyfluff:~$ '], WL.wallet]); line('✓ whitelisted', 'ok'); return; }
+    while (true) {
+      var v = await ask('wallet@elyfluff:~$', '0x...', { paste: true, max: 70 });
+      line([['ps', 'wallet@elyfluff:~$ '], v]);
+      var errs = [];
+      if (!/^0x/i.test(v)) errs.push('address must start with 0x');
+      if (v.length !== 42) errs.push('address must be 42 characters (got ' + v.length + ')');
+      else if (!WALLET_RE.test(v)) errs.push('address can only use 0-9 and a-f');
+      if (errs.length) { errs.forEach(function (e) { line('✗ ' + e, 'err'); }); continue; }
+      var t = line('', 'dim'), stop = spinner(t, 'transmitting...');
+      var resp = await api('wallet', { username: WL.username, wallet: v });
+      stop(); t.textContent = 'transmitting... done';
+      if (!resp || !resp.ok) { line('✗ ' + String((resp && resp.error) || 'could not save, try again').toLowerCase(), 'err'); continue; }
+      WL.wallet = v; WL.complete = true;
+      if (resp.applicantId) WL.applicantId = resp.applicantId;
+      save();
+      line('✓ whitelisted', 'ok');
+      break;
+    }
+  }
+
+  /* ---------- permit ---------- */
+  async function permitStage() {
+    await typeLine('$ ./print_permit --holder @' + WL.username, null, 18);
+    var body = win('elyfluff@permit: ~/permits/' + (WL.applicantId || 'EF-00000') + '.txt', 'red permit');
+    var cv = el('canvas'); cv.width = 1200; cv.height = 720; cv.setAttribute('aria-label', 'Your ElyFluff whitelist permit');
+    body.appendChild(cv);
+    await drawPermit(cv);
+    var row = el('div', 'btn-row');
+    row.appendChild(button('download ↓', '', function () { downloadCanvas(cv); }));
+    row.appendChild(button('share on X ↗', 'btn-ghost', function () {
+      var text = 'I just got my ' + (C.PROJECT_NAME || 'ElyFluff') + ' whitelist permit.\n\n' + fmt(SUPPLY) + ' NFTs + ' + TICKER + '. Testnet on HyperEVM, mainnet on Elysium.\n\nJoin with my invite: ' + refLink() + '\n\n@' + handle();
+      openUrl('https://x.com/intent/tweet?text=' + encodeURIComponent(text));
+    }));
+    var cp = button('copy invite link', 'btn-ghost', async function () {
+      try { await navigator.clipboard.writeText(refLink()); cp.textContent = 'copied ✓'; } catch (e) { cp.textContent = 'copy failed'; }
+      setTimeout(function () { cp.textContent = 'copy invite link'; }, 1800);
+    });
+    row.appendChild(cp);
+    OUT.appendChild(row);
+    line([['dim', 'your invite link: '], ['sky', refLink()]]);
+    line('keep notifications on for @' + handle() + ', updates will be announced there.', 'dim');
+    gap();
+  }
+  function downloadCanvas(cv) {
+    cv.toBlob(function (b) {
+      if (!b) return;
+      var u = URL.createObjectURL(b), a = document.createElement('a');
+      a.href = u; a.download = 'elyfluff-permit-' + (WL.username || 'holder') + '.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(u); }, 5000);
+    }, 'image/png');
+  }
+  async function drawPermit(cv) {
+    if (document.fonts && document.fonts.load) {
+      await Promise.all([document.fonts.load('64px "Rubik Mono One"'), document.fonts.load('500 20px "IBM Plex Mono"'), document.fonts.load('700 20px "IBM Plex Mono"')]).catch(function () {});
+    }
+    var x = cv.getContext('2d'), W = cv.width, H = cv.height;
+    var user = WL.username || 'anon', seed = hashStr(user.toLowerCase());
+    var INK = '#171717', PAPER = '#ECF5F1', CR = '#A31C1B', TEAL = '#5EE6CF', TI = '#0C7F6C';
+    x.fillStyle = PAPER; x.fillRect(0, 0, W, H);
+    x.save();
+    x.translate(860, 360);
+    for (var a = 0; a < 120; a++) {
+      x.rotate(Math.PI * 2 / 120);
+      x.fillStyle = a % 2 ? 'rgba(12,127,108,0.07)' : 'rgba(23,23,23,0.035)';
+      x.beginPath(); x.moveTo(0, 0); x.lineTo(1400, -18); x.lineTo(1400, 18); x.closePath(); x.fill();
+    }
+    x.restore();
+    x.fillStyle = 'rgba(23,23,23,0.10)';
+    for (var dx = 10; dx < W; dx += 14) for (var dy = 10; dy < H; dy += 14) x.fillRect(dx, dy, 1.6, 1.6);
+    function T(s, px, py, font, color, ls, align) {
+      x.font = font; x.fillStyle = color; x.textAlign = align || 'left';
+      if ('letterSpacing' in x) x.letterSpacing = (ls || 0) + 'px';
+      x.fillText(s, px, py);
+      if ('letterSpacing' in x) x.letterSpacing = '0px';
+      x.textAlign = 'left';
+    }
+    function fit(s, maxW, size, fam) { var f; do { f = size + 'px ' + fam; x.font = f; size -= 2; } while (x.measureText(s).width > maxW && size > 22); return f; }
+    x.textBaseline = 'alphabetic';
+
+    var ix = 58, iy = 64, is = 340;
+    x.fillStyle = CR; x.fillRect(ix + 14, iy + 14, is + 12, is + 12);
+    x.fillStyle = INK; x.fillRect(ix - 6, iy - 6, is + 12, is + 12);
+    var sp = document.createElement('canvas'); sp.width = sp.height = is;
+    var spx = sp.getContext('2d', { willReadFrequently: true });
+    var imgs = (C.NFT_IMAGES || []).filter(function (i) { return i && i.src; });
+    var specId = 1 + (seed % SUPPLY), drawn = false;
+    if (imgs.length) { var item = imgs[seed % imgs.length], im = await loadImg(item.src); if (im) { coverDraw(spx, im, is); drawn = true; specId = item.id || specId; } }
+    if (!drawn) drawFluff(spx, is, seed);
+    x.drawImage(sp, ix, iy);
+    T('holder_photo: [ELYFLUFF #' + pad(specId) + ']', ix, iy + is + 44, '500 17px "IBM Plex Mono", monospace', '#5F6E6A', 0.5);
+    T('> x.com/' + handle(), ix, iy + is + 70, '500 17px "IBM Plex Mono", monospace', '#5F6E6A', 0.5);
+
+    var rx = 470;
+    T('$ whoami', rx, 92, '500 18px "IBM Plex Mono", monospace', '#5F6E6A', 0);
+    var who = '@' + user.toUpperCase();
+    x.font = fit(who, 680, 66, '"Rubik Mono One", "Archivo Black", sans-serif');
+    x.fillStyle = TEAL; x.fillText(who, rx + 4, 166);
+    x.fillStyle = INK; x.fillText(who, rx, 162);
+    T('$ cat status', rx, 214, '500 18px "IBM Plex Mono", monospace', '#5F6E6A', 0);
+    x.font = fit('WHITELISTED', 690, 84, '"Rubik Mono One", "Archivo Black", sans-serif');
+    x.lineJoin = 'round';
+    x.fillStyle = CR; x.fillText('WHITELISTED', rx + 7, 305);
+    x.fillStyle = PAPER; x.fillText('WHITELISTED', rx, 298);
+    x.strokeStyle = INK; x.lineWidth = 4; x.strokeText('WHITELISTED', rx, 298);
+
+    var rows = [['wallet', shortWallet(WL.wallet) || '0x...'], ['permit_id', WL.applicantId || 'EF-00000'], ['issued', new Date().toLocaleDateString('en-GB').replace(/\//g, '.')], ['network', 'hyperevm → elysium']];
+    rows.forEach(function (r, i) {
+      var yy = 372 + i * 42;
+      T(r[0], rx, yy, '500 19px "IBM Plex Mono", monospace', '#5F6E6A', 0);
+      T(r[1], rx + 150, yy, '700 20px "IBM Plex Mono", monospace', INK, 0.5);
+      x.strokeStyle = 'rgba(23,23,23,0.25)'; x.lineWidth = 1.5; x.setLineDash([3, 4]);
+      x.beginPath(); x.moveTo(rx, yy + 14); x.lineTo(rx + 400, yy + 14); x.stroke(); x.setLineDash([]);
+    });
+    var rr = mulberry32(seed), bx = 920;
+    while (bx < 1140) { var bw = 2 + Math.floor(rr() * 5); x.fillStyle = INK; x.fillRect(bx, 356, bw, 112); bx += bw + 2 + Math.floor(rr() * 4); }
+    T(WL.applicantId || 'EF-00000', 920, 494, '500 15px "IBM Plex Mono", monospace', '#5F6E6A', 1);
+
+    x.fillStyle = INK; x.fillRect(rx, 560, 330, 50);
+    T('STATUS: WHITELISTED', rx + 18, 593, '700 21px "IBM Plex Mono", monospace', PAPER, 1);
+    x.fillStyle = CR; x.fillRect(rx + 344, 562, 14, 46);
+    x.fillStyle = TI; x.fillRect(920, 560, 220, 50);
+    T(TICKER + ' · ELYSIUM', 1030, 593, '700 18px "IBM Plex Mono", monospace', '#FFFFFF', 1, 'center');
+    T('tier: pending selection (gtd / fcfs)', rx, 650, '500 17px "IBM Plex Mono", monospace', '#5F6E6A', 0);
+  }
+
+  /* ---------- vault ---------- */
+  async function vaultStage() {
+    await typeLine('$ ./vault --decrypt', null, 20);
+    var t = line('', 'dim'), stop = spinner(t, 'decrypting project files...');
+    await pause(1100);
+    stop(); t.textContent = 'decrypting project files... done';
+    line([['ok', '✓ access granted. '], ['hl teal', '5 FILES DECRYPTED']]);
+    gap();
+
+    await typeLine('$ cat about.txt', null, 16);
+    var a = win('elyfluff@vault: ~/about.txt');
+    [['ElyFluff is a ' + fmt(SUPPLY) + '-piece NFT collection paired with the ' + TICKER + ' token, built for the Elysium mainnet.'],
+     ['Before mainnet, ElyFluff runs a full test launch on HyperEVM Testnet. Wallets that hold the testnet NFT or testnet ' + TICKER + ' qualify for Elysium mainnet.'],
+     ['Access is earned, not bought. Complete the tasks, get selected, secure your spot.']].forEach(function (p) { a.appendChild(el('div', 'ln', p[0])); });
+    gap();
+
+    await typeLine('$ cat tokenomics.cfg', null, 16);
+    var tk = win('elyfluff@vault: ~/tokenomics.cfg', 'teal');
+    var dn = el('div', 'donut'), dc = el('div', 'donut-c');
+    var acc = 0, stops = [];
+    (C.ALLOCATION || []).forEach(function (al) { stops.push(al.color + ' ' + acc + '% ' + (acc + al.pct) + '%'); acc += al.pct; });
+    dc.style.background = 'conic-gradient(' + stops.join(',') + ')';
+    var dt = el('div'); dt.appendChild(el('div', 'donut-t', TICKER)); dt.appendChild(el('div', 'dim', 'total supply: ' + (C.TOKEN_SUPPLY || 'TBA')));
+    dn.appendChild(dc); dn.appendChild(dt); tk.appendChild(dn);
+    var al = el('div', 'alloc');
+    (C.ALLOCATION || []).forEach(function (r) {
+      var row = el('div', 'al');
+      row.appendChild(el('span', 'al-n', r.label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+$/, '')));
+      var bar = el('div', 'al-bar');
+      var on = Math.round(r.pct / 2);
+      for (var i = 0; i < 20; i++) { var c = el('i'); if (i < on) c.style.background = r.color; bar.appendChild(c); }
+      row.appendChild(bar);
+      row.appendChild(el('span', 'al-p', r.pct + '%'));
+      al.appendChild(row);
+    });
+    tk.appendChild(al);
+    gap();
+
+    await typeLine('$ ./launchpad.sh --network hyperevm-testnet', null, 16);
+    var lp = win('elyfluff@vault: ~/launchpad.sh', 'red');
+    var pd = el('div', 'pad');
+    function mintCard(cls, tier, title, rows, label, url) {
+      var m = el('div', 'mint ' + cls);
+      m.appendChild(el('span', 'hl' + (cls === 'fcfs' ? ' ink' : ''), tier));
+      m.appendChild(el('h4', null, title));
+      rows.forEach(function (r) { var rw = el('div', 'row'); rw.appendChild(el('span', null, r[0])); rw.appendChild(el('span', null, r[1])); m.appendChild(rw); });
+      var live = !!C.MINT_LIVE && !!url;
+      var s = el(live ? 'button' : 'div', 'soon' + (live ? ' live' : ''), live ? label + ' ↗' : '[ coming soon ]');
+      if (live) { s.type = 'button'; s.addEventListener('click', function () { openUrl(url); }); }
+      m.appendChild(s);
+      return m;
+    }
+    pd.appendChild(mintCard('gtd', 'GTD', 'Guaranteed mint', [['price', C.GTD_MINT_PRICE || '0.33 HYPE'], ['asset', 'ElyFluff NFT'], ['network', 'HyperEVM Testnet'], ['access', 'GTD list only']], 'mint now', C.GTD_MINT_URL));
+    pd.appendChild(mintCard('fcfs', 'FCFS', 'Token claim', [['delivery', 'claim or distribution'], ['asset', 'testnet ' + TICKER], ['network', 'HyperEVM Testnet'], ['access', 'first come, first served']], 'claim now', C.FCFS_CLAIM_URL));
+    lp.appendChild(pd);
+    var chk = el('div', 'check');
+    var crow = el('div', 'inrow');
+    var cbox = el('label', 'inbox'); cbox.appendChild(el('span', 'ps', '@'));
+    var cin = el('input'); cin.type = 'text'; cin.placeholder = 'check a username'; cin.value = WL.username; cin.setAttribute('autocapitalize', 'off'); cin.spellcheck = false; cin.setAttribute('aria-label', 'X username');
+    cbox.appendChild(cin); crow.appendChild(cbox);
+    var cout = el('div', 'ln dim', 'selections are announced after the whitelist closes.');
+    crow.appendChild(button('check status', 'btn-sm', async function () {
+      var u = parseUsername(cin.value);
+      if (!u) { cout.className = 'ln err'; cout.textContent = '✗ invalid username'; return; }
+      cout.className = 'ln dim'; cout.textContent = '> checking @' + u + ' ...';
+      var r = DEMO ? { ok: true, status: 'PENDING' } : await apiGet('action=check&u=' + encodeURIComponent(u));
+      if (!r || !r.ok) { cout.className = 'ln err'; cout.textContent = '✗ could not check right now'; return; }
+      var s = r.status;
+      if (s === 'GTD') { cout.className = 'ln ok'; cout.textContent = '✓ @' + u + ' is selected for GTD. you can mint the testnet NFT.'; }
+      else if (s === 'FCFS') { cout.className = 'ln sky'; cout.textContent = '✓ @' + u + ' is selected for FCFS. you will receive testnet ' + TICKER + '.'; }
+      else if (s === 'PENDING') { cout.className = 'ln ok'; cout.textContent = '✓ @' + u + ' is whitelisted. selection is pending.'; }
+      else if (s === 'IN_PROGRESS') { cout.className = 'ln err'; cout.textContent = '✗ @' + u + ' has not finished all tasks.'; }
+      else { cout.className = 'ln err'; cout.textContent = '✗ @' + u + ' is not on the list.'; }
+    }));
+    chk.appendChild(crow); chk.appendChild(cout);
+    lp.appendChild(chk);
+    gap();
+
+    await typeLine('$ open treasure_map.png', null, 16);
+    var mp = win('elyfluff@vault: ~/treasure_map.png', 'wide');
+    var tm = el('div', 'tmap'); tm.id = 'tmap'; tm.setAttribute('aria-label', 'Treasure map roadmap');
+    var td = el('div', 'tm-detail'); td.id = 'tmDetail'; td.setAttribute('aria-live', 'polite');
+    mp.appendChild(tm); mp.appendChild(td);
+    buildMap(true);
+    gap();
+
+    await typeLine('$ tail -f live_feed.log', null, 16);
+    var lv = win('elyfluff@vault: ~/live_feed.log', 'teal');
+    var fd = el('div', 'feed'); fd.id = 'feed';
+    lv.appendChild(fd);
+    renderFeed(lastStats);
+    gap();
+    line('$ ', null).appendChild(el('span', 'caret'));
+  }
+
+  var lastStats = null;
+  function renderFeed(j) {
+    if (j) lastStats = j;
+    var fd = $('#feed');
+    if (!fd) return;
+    fd.textContent = '';
+    var recent = (lastStats && Array.isArray(lastStats.recent)) ? lastStats.recent : [];
+    var top = (lastStats && Array.isArray(lastStats.top)) ? lastStats.top : [];
+    if (!recent.length) fd.appendChild(el('div', 'ln dim', DEMO ? '[demo] live entries appear here once the sheet is connected.' : '[feed] waiting for the first entries...'));
+    recent.slice(0, 8).forEach(function (r) {
+      var d = el('div', 'ln'); d.appendChild(el('span', 'dim', '[' + ago(r.t) + '] ')); d.appendChild(el('span', 'ps', '@' + r.u)); d.appendChild(el('span', 'ok', ' joined the whitelist ✓'));
+      fd.appendChild(d);
+    });
+    fd.appendChild(el('div', 'ln board-h', '# top inviters'));
+    if (!top.length) fd.appendChild(el('div', 'ln dim', 'no invites yet. share your invite link.'));
+    top.slice(0, 7).forEach(function (r, i) {
+      var d = el('div', 'ln'); d.appendChild(el('span', i === 0 ? 'hl' : 'dim', String(i + 1).padStart(2, '0'))); d.appendChild(document.createTextNode('  @' + r.u + '  ')); d.appendChild(el('span', 'ok', r.n + (r.n === 1 ? ' invite' : ' invites')));
+      fd.appendChild(d);
+    });
+  }
+
+/* ---------- procedural fluff (preview art) ---------- */
   var FURS = [
     ['Snow', '#EAF6F3', '#AFC4BF', '#FFFFFF'],
     ['Mint', '#5EE6CF', '#1B8F7E', '#B8FFF1'],
@@ -422,65 +899,6 @@
     requestAnimationFrame(frame);
   }
 
-  /* ---------- tokenomics ---------- */
-  function tokenomics() {
-    var list = $('#allocList'), svg = $('#donut');
-    if (!list || !svg) return;
-    var NS = 'http://www.w3.org/2000/svg';
-    var alloc = C.ALLOCATION || [], R = 78, CIRC = 2 * Math.PI * R, acc = 0, gap = 2.2;
-    var bgc = document.createElementNS(NS, 'circle');
-    bgc.setAttribute('cx', 100); bgc.setAttribute('cy', 100); bgc.setAttribute('r', R);
-    bgc.setAttribute('stroke', 'rgba(255,255,255,0.05)');
-    svg.appendChild(bgc);
-    alloc.forEach(function (a, i) {
-      var len = CIRC * a.pct / 100;
-      var c = document.createElementNS(NS, 'circle');
-      c.setAttribute('class', 'seg');
-      c.setAttribute('cx', 100); c.setAttribute('cy', 100); c.setAttribute('r', R);
-      c.setAttribute('stroke', a.color);
-      c.setAttribute('stroke-dasharray', Math.max(0, len - gap) + ' ' + (CIRC - Math.max(0, len - gap)));
-      c.setAttribute('data-off', String(-acc));
-      c.setAttribute('stroke-dashoffset', String(-acc));
-      c.setAttribute('data-i', i);
-      svg.appendChild(c);
-      acc += len;
-
-      var row = el('div', 'al-row'); row.setAttribute('data-i', i);
-      var l = el('div', 'al-l'); var sw = el('span', 'al-sw'); sw.style.background = a.color;
-      l.appendChild(sw); l.appendChild(el('span', null, a.label));
-      var p = el('div', 'al-p', a.pct + '%');
-      var bar = el('div', 'al-bar'); var f = el('div', 'al-fill');
-      f.style.background = 'linear-gradient(90deg,' + a.color + 'aa,' + a.color + ')';
-      f.setAttribute('data-w', String(a.pct / 40 * 100));
-      bar.appendChild(f);
-      row.appendChild(l); row.appendChild(p); row.appendChild(bar);
-      list.appendChild(row);
-    });
-    function hot(i, on) {
-      $$('.seg', svg).forEach(function (s) { s.classList.toggle('hot', on && s.getAttribute('data-i') === String(i)); });
-      $$('.al-row', list).forEach(function (r) { r.classList.toggle('hot', on && r.getAttribute('data-i') === String(i)); });
-    }
-    $$('.al-row', list).concat($$('.seg', svg)).forEach(function (n) {
-      n.addEventListener('mouseenter', function () { hot(n.getAttribute('data-i'), true); });
-      n.addEventListener('mouseleave', function () { hot(null, false); });
-      n.addEventListener('click', function () { hot(n.getAttribute('data-i'), true); });
-    });
-  }
-  function showTokenomics(root) {
-    $$('.al-fill', root).forEach(function (f) { f.style.width = Math.min(100, Number(f.getAttribute('data-w'))) + '%'; });
-  }
-
-  /* ---------- reveal ---------- */
-  function reveal() {
-    var els = $$('.reveal');
-    function show(e) { e.classList.add('in'); showTokenomics(e); }
-    if (!('IntersectionObserver' in window) || reduced) { els.forEach(show); return; }
-    var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (en) { if (en.isIntersecting) { show(en.target); io.unobserve(en.target); } });
-    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-    els.forEach(function (e) { io.observe(e); });
-  }
-
   /* ---------- treasure map roadmap ---------- */
   var CURRENT_PHASE = 0;
   function phases() {
@@ -698,9 +1116,8 @@
       tabs.appendChild(b);
     });
     box.appendChild(tabs);
-    var st = i === CURRENT_PHASE ? ['pill pill-red tm-status', 'LIVE NOW'] : (i === 4 ? ['pill pill-hyper tm-status', 'THE TREASURE'] : ['pill pill-soft tm-status', i < CURRENT_PHASE ? 'COMPLETE' : 'UPCOMING']);
+    var st = i === CURRENT_PHASE ? ['tm-status now', 'LIVE NOW'] : (i === 4 ? ['tm-status tr', 'THE TREASURE'] : ['tm-status up', i < CURRENT_PHASE ? 'COMPLETE' : 'UPCOMING']);
     var pill = el('span', st[0]);
-    if (i === CURRENT_PHASE) pill.appendChild(el('span', 'pulse-dot'));
     pill.appendChild(document.createTextNode(st[1]));
     box.appendChild(pill);
     box.appendChild(el('h3', 'tm-name', ph.n + ' · ' + ph.name));
@@ -710,487 +1127,6 @@
     ph.items.forEach(function (t) { ul.appendChild(el('li', null, t)); });
     box.appendChild(ul);
     box.appendChild(el('p', 'tm-foot mono', 'Tap any X on the map to explore that stop.'));
-  }
-
-  /* ---------- launchpad ---------- */
-  function launchpad() {
-    var g = $('#btnMintGtd'), f = $('#btnClaimFcfs');
-    if (C.MINT_LIVE) {
-      g.disabled = !C.GTD_MINT_URL; f.disabled = !C.FCFS_CLAIM_URL;
-      g.lastElementChild.textContent = 'Mint now';
-      f.lastElementChild.textContent = 'Claim now';
-      $$('[data-mint-status]').forEach(function (p) { p.textContent = 'LIVE'; p.closest('.mint-card').classList.add('live'); });
-      g.addEventListener('click', function () { openUrl(C.GTD_MINT_URL); });
-      f.addEventListener('click', function () { openUrl(C.FCFS_CLAIM_URL); });
-    }
-    var out = $('#checkOut'), inp = $('#inCheck'), btn = $('#btnCheck');
-    async function check() {
-      var u = parseUsername(inp.value);
-      out.className = 'check-out mono';
-      if (!u) { out.textContent = 'Enter a valid X username.'; return; }
-      btn.classList.add('busy');
-      out.textContent = '> checking @' + u + ' ...';
-      var res = null;
-      if (DEMO) { await sleep(700); res = { ok: true, status: 'PENDING' }; }
-      else {
-        try { var r = await fetch(C.SCRIPT_URL + '?action=check&u=' + encodeURIComponent(u), { redirect: 'follow' }); res = await r.json(); }
-        catch (e) { res = { ok: false }; }
-      }
-      btn.classList.remove('busy');
-      if (!res || !res.ok) { out.textContent = 'Could not check right now. Try again.'; return; }
-      var s = res.status;
-      if (s === 'GTD') { out.classList.add('gtd'); out.textContent = '@' + u + ' is selected for GTD. You can mint the testnet NFT.'; }
-      else if (s === 'FCFS') { out.classList.add('fcfs'); out.textContent = '@' + u + ' is selected for FCFS. You will receive testnet ' + TICKER + '.'; }
-      else if (s === 'PENDING') { out.classList.add('ok'); out.textContent = '@' + u + ' completed all tasks. Selection is pending.'; }
-      else if (s === 'IN_PROGRESS') { out.textContent = '@' + u + ' has not finished all tasks yet.'; }
-      else { out.textContent = '@' + u + ' is not on the list yet. Complete the whitelist tasks.'; }
-    }
-    btn.addEventListener('click', check);
-    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') check(); });
-  }
-
-  /* ---------- live stats, feed, leaderboard ---------- */
-  function liveStats() {
-    var feed = $('#feed'), board = $('#board');
-    function emptyFeed() {
-      feed.textContent = '';
-      var li = el('li', 'empty'); li.appendChild(el('b', null, 'Be the first to join'));
-      li.appendChild(document.createTextNode('New whitelist entries appear here live.'));
-      feed.appendChild(li);
-    }
-    function emptyBoard() {
-      board.textContent = '';
-      var li = el('li', 'empty'); li.appendChild(el('b', null, 'No inviters yet'));
-      li.appendChild(document.createTextNode('Share your invite link after you join.'));
-      board.appendChild(li);
-    }
-    emptyFeed(); emptyBoard();
-    if (DEMO) return;
-    var lastKey = '';
-    async function poll() {
-      try {
-        var r = await fetch(C.SCRIPT_URL + '?action=stats', { redirect: 'follow' });
-        var j = await r.json();
-        if (!j || !j.ok) return;
-        var n = Number(j.count) || 0;
-        var mA = $('#mApps');
-        if (mA.textContent !== fmt(n)) { mA.textContent = fmt(n); mA.classList.remove('tick'); void mA.offsetWidth; mA.classList.add('tick'); }
-        $('#mAppsSub').textContent = n > 0 ? 'Completed all tasks · live' : 'Be one of the first';
-        if (n > 0) {
-          $$('.lb-apps-n').forEach(function (e) { e.textContent = fmt(n); });
-          $$('.lb-apps').forEach(function (e) { e.hidden = false; });
-        }
-        var recent = Array.isArray(j.recent) ? j.recent : [];
-        var key = recent.map(function (x) { return x.u + x.t; }).join('|');
-        if (key !== lastKey) {
-          lastKey = key;
-          if (!recent.length) emptyFeed();
-          else {
-            feed.textContent = '';
-            recent.slice(0, 7).forEach(function (x) {
-              var li = el('li');
-              li.appendChild(el('span', 'f-av', String(x.u || '?').charAt(0).toUpperCase()));
-              var u = el('span', 'f-u'); u.appendChild(document.createTextNode('@' + x.u + ' ')); u.appendChild(el('em', null, 'joined the whitelist'));
-              li.appendChild(u);
-              var t = el('span', 'f-t', ago(x.t)); t.setAttribute('data-t', x.t);
-              li.appendChild(t);
-              feed.appendChild(li);
-            });
-          }
-        } else {
-          $$('.f-t', feed).forEach(function (t) { t.textContent = ago(Number(t.getAttribute('data-t'))); });
-        }
-        var top = Array.isArray(j.top) ? j.top : [];
-        if (!top.length) emptyBoard();
-        else {
-          board.textContent = '';
-          top.slice(0, 7).forEach(function (x, i) {
-            var li = el('li');
-            li.appendChild(el('span', 'rank', String(i + 1)));
-            li.appendChild(el('span', 'f-u', '@' + x.u));
-            li.appendChild(el('span', 'n', x.n + (x.n === 1 ? ' invite' : ' invites')));
-            board.appendChild(li);
-          });
-        }
-      } catch (e) {}
-    }
-    poll();
-    setInterval(function () { if (!document.hidden) poll(); }, 20000);
-  }
-
-  /* ---------- api ---------- */
-  async function api(action, data) {
-    var body = Object.assign({ action: action }, data);
-    if (DEMO) {
-      await sleep(800);
-      var steps = { follow: 2, engage: 3, comment: 4, wallet: 5 };
-      return { ok: true, step: steps[action], applicantId: WL.applicantId || ('EF-' + pad(1 + Math.floor(Math.random() * 999), 5)) };
-    }
-    var ctrl = new AbortController();
-    var to = setTimeout(function () { ctrl.abort(); }, 20000);
-    try {
-      var res = await fetch(C.SCRIPT_URL, {
-        method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(body), signal: ctrl.signal, redirect: 'follow'
-      });
-      return await res.json();
-    } catch (e) {
-      return { ok: false, error: 'Network error. Please try again.' };
-    } finally { clearTimeout(to); }
-  }
-
-  /* ---------- whitelist ---------- */
-  var WL_KEY = 'ef_wl_v2';
-  var WL = Object.assign({ step: 1, username: '', opened: {}, comment: '', wallet: '', applicantId: '' }, store.get(WL_KEY) || {});
-  if (!WL.opened) WL.opened = {};
-  function save() { store.set(WL_KEY, WL); }
-  var USER_RE = /^[A-Za-z0-9_]{1,15}$/;
-  var WALLET_RE = /^0x[a-fA-F0-9]{40}$/;
-  var REPLY_RE = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})\/status\/(\d{5,25})(?:[/?#].*)?$/i;
-  var REF_RE = /^EF-\d{5}$/;
-  function postId() { var m = String(C.TASK_POST_URL || '').match(/status\/(\d+)/); return m ? m[1] : ''; }
-  function parseUsername(v) {
-    v = String(v || '').trim();
-    var m = v.match(/(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})/i);
-    if (m) v = m[1];
-    v = v.replace(/^@+/, '');
-    return USER_RE.test(v) ? v : '';
-  }
-  function siteBase() {
-    var s = String(C.SITE_URL || '').replace(/\/+$/, '');
-    return s || (location.origin + location.pathname).replace(/\/index\.html$/, '');
-  }
-  function refLink() { return siteBase() + '/?ref=' + encodeURIComponent(WL.applicantId || ''); }
-  (function captureRef() {
-    try {
-      var r = new URLSearchParams(location.search).get('ref');
-      if (r && REF_RE.test(r.toUpperCase())) store.set('ef_ref', r.toUpperCase());
-    } catch (e) {}
-  })();
-
-  var logEl;
-  function log(msg, type) {
-    if (!logEl) return;
-    var row = el('div', 'log-line ' + (type || ''), '[' + new Date().toTimeString().slice(0, 8) + '] ' + msg);
-    logEl.appendChild(row);
-    while (logEl.children.length > 50) logEl.removeChild(logEl.firstChild);
-    logEl.scrollTop = logEl.scrollHeight;
-  }
-
-  function render() {
-    for (var i = 1; i <= 4; i++) {
-      var t = $('#task' + i);
-      t.classList.toggle('locked', i > WL.step);
-      t.classList.toggle('active', i === WL.step);
-      t.classList.toggle('done', i < WL.step);
-      t.querySelector('[data-state]').textContent = i < WL.step ? 'Verified' : (i === WL.step ? 'Active' : 'Locked');
-    }
-    $$('#wlSegs i').forEach(function (seg, k) {
-      seg.classList.toggle('on', k + 1 < WL.step);
-      seg.classList.toggle('cur', k + 1 === WL.step);
-    });
-    $('#wlPText').textContent = WL.step >= 5 ? 'Complete' : ('Step ' + WL.step + ' of 4');
-    $('#task1 .task-note').textContent = WL.username ? 'verified as @' + WL.username : '';
-    $('#task2 .task-note').textContent = 'like and repost recorded';
-    $('#task3 .task-note').textContent = WL.comment ? WL.comment : 'comment recorded';
-    $('#task4 .task-note').textContent = WL.wallet ? shortWallet(WL.wallet) : 'wallet registered';
-    $('#wlReset').hidden = WL.step <= 1 && !WL.username;
-    var map = { follow: '#btnFollow', like: '#btnLike', repost: '#btnRepost', reply: '#btnReply' };
-    Object.keys(map).forEach(function (k) { $(map[k]).classList.toggle('opened', !!WL.opened[k]); });
-    $('#btnV1').disabled = !WL.opened.follow;
-    $('#btnV2').disabled = !(WL.opened.like && WL.opened.repost);
-    $('#btnV3').disabled = !WL.opened.reply;
-    if (WL.step >= 5) {
-      $('#wlResult').hidden = false;
-      $('#refCode').textContent = WL.applicantId || 'EF-00000';
-      drawCard();
-      unlockVault(false);
-    } else { $('#wlResult').hidden = true; }
-  }
-
-  function openX(url, key) {
-    openUrl(url);
-    WL.opened[key] = Date.now();
-    save();
-    log('opened ' + key + ' on X', 'cmd');
-    render();
-  }
-  function tooSoon(key) {
-    var at = WL.opened[key] || 0;
-    var left = Math.ceil(MIN_SEC - (Date.now() - at) / 1000);
-    if (left > 0) { log('finish the task on X first. try again in ' + left + 's', 'err'); return true; }
-    return false;
-  }
-  async function busy(btn, fn) {
-    btn.classList.add('busy');
-    try { await fn(); } finally { btn.classList.remove('busy'); }
-  }
-  function applyResp(resp, nextStep) {
-    if (resp.applicantId) WL.applicantId = resp.applicantId;
-    if (resp.wallet) WL.wallet = resp.wallet;
-    if (resp.comment) WL.comment = resp.comment;
-    WL.step = Math.max(WL.step, resp.step || nextStep);
-    save(); render();
-  }
-  async function pasteInto(input, label) {
-    try {
-      var t = await navigator.clipboard.readText();
-      if (!t) throw new Error('empty');
-      input.value = t.trim();
-      log(label + ' pasted', 'ok');
-    } catch (e) {
-      input.focus();
-      log('could not read clipboard. long-press the box and tap Paste.', 'err');
-    }
-  }
-
-  var vaultOpen = false;
-  function isUnlocked() { return WL.step >= 5 || !!store.get('ef_unlocked'); }
-  function unlockVault(announce) {
-    if (vaultOpen) return;
-    vaultOpen = true;
-    document.body.classList.add('unlocked');
-    var lk = $('#locked'), v = $('#vault');
-    if (lk) lk.hidden = true;
-    if (v) v.hidden = false;
-    $$('.gated').forEach(function (a) { a.hidden = false; });
-    $$('.nl-lock').forEach(function (e) { e.textContent = 'open'; });
-    $$('.lock-link').forEach(function (a) { a.setAttribute('href', '#vault'); });
-    requestAnimationFrame(function () { buildMap(true); });
-    if (announce) {
-      var vo = $('#vaultOpen');
-      if (vo) { vo.classList.add('unlock-flash'); }
-    }
-  }
-  function restoreAccess() {
-    var inp = $('#inRestore'), out = $('#restoreOut'), btn = $('#btnRestore');
-    if (!inp) return;
-    async function go() {
-      var u = parseUsername(inp.value);
-      out.className = 'restore-out mono';
-      if (!u) { out.classList.add('err'); out.textContent = 'Enter a valid X username.'; return; }
-      btn.classList.add('busy');
-      out.textContent = '> checking @' + u + ' ...';
-      var res = null;
-      if (DEMO) { await sleep(700); res = { ok: true, status: 'PENDING' }; }
-      else {
-        try { var r = await fetch(C.SCRIPT_URL + '?action=check&u=' + encodeURIComponent(u), { redirect: 'follow' }); res = await r.json(); }
-        catch (e) { res = { ok: false }; }
-      }
-      btn.classList.remove('busy');
-      if (!res || !res.ok) { out.classList.add('err'); out.textContent = 'Could not check right now. Try again.'; return; }
-      if (res.status === 'PENDING' || res.status === 'GTD' || res.status === 'FCFS') {
-        store.set('ef_unlocked', u);
-        out.classList.add('ok'); out.textContent = 'Access restored for @' + u + '.';
-        unlockVault(true);
-        setTimeout(function () { var v = $('#vault'); if (v) v.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }); }, 200);
-      } else if (res.status === 'IN_PROGRESS') {
-        out.classList.add('err'); out.textContent = '@' + u + ' has not finished all tasks yet.';
-      } else {
-        out.classList.add('err'); out.textContent = '@' + u + ' is not on the list. Complete the tasks first.';
-      }
-    }
-    btn.addEventListener('click', go);
-    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
-  }
-
-  function whitelist() {
-    logEl = $('#wlLog');
-    if (!logEl) return;
-    if (DEMO) $('#demoFlag').hidden = false;
-    var pid = postId(), h = handle();
-    if (WL.username) $('#inUser').value = WL.username;
-
-    $('#btnFollow').addEventListener('click', function () { openX('https://x.com/intent/follow?screen_name=' + encodeURIComponent(h), 'follow'); });
-    $('#btnLike').addEventListener('click', function () { openX('https://x.com/intent/like?tweet_id=' + pid, 'like'); });
-    $('#btnRepost').addEventListener('click', function () { openX('https://x.com/intent/retweet?tweet_id=' + pid, 'repost'); });
-    $('#btnReply').addEventListener('click', function () { openX('https://x.com/intent/tweet?in_reply_to=' + pid, 'reply'); });
-    $('#btnPaste').addEventListener('click', function () { pasteInto($('#inComment'), 'reply link'); });
-    $('#btnPasteW').addEventListener('click', function () { pasteInto($('#inWallet'), 'wallet'); });
-
-    $('#btnV1').addEventListener('click', function () {
-      var btn = this, u = parseUsername($('#inUser').value);
-      if (!u) { log('invalid X username. use letters, numbers or _ (max 15).', 'err'); $('#inUser').focus(); return; }
-      if (tooSoon('follow')) return;
-      busy(btn, async function () {
-        log('$ verify --follow @' + u, 'cmd');
-        var ref = store.get('ef_ref') || '';
-        var resp = await api('follow', { username: u, ref: ref });
-        if (!resp || !resp.ok) { log('error: ' + ((resp && resp.error) || 'unknown error'), 'err'); return; }
-        WL.username = u;
-        log(resp.step && resp.step > 2 ? 'welcome back @' + u + '. progress restored.' : 'follow recorded. task 01 verified.', 'ok');
-        applyResp(resp, 2);
-      });
-    });
-    $('#btnV2').addEventListener('click', function () {
-      var btn = this;
-      if (tooSoon('like') || tooSoon('repost')) return;
-      busy(btn, async function () {
-        log('$ verify --like --repost', 'cmd');
-        var resp = await api('engage', { username: WL.username });
-        if (!resp || !resp.ok) { log('error: ' + ((resp && resp.error) || 'unknown error'), 'err'); return; }
-        log('like and repost recorded. task 02 verified.', 'ok');
-        applyResp(resp, 3);
-      });
-    });
-    $('#btnV3').addEventListener('click', function () {
-      var btn = this, v = String($('#inComment').value || '').trim(), m = v.match(REPLY_RE);
-      if (!m) { log('paste the link of your reply on X.', 'err'); return; }
-      if (m[1].toLowerCase() !== WL.username.toLowerCase()) { log('this reply is not from @' + WL.username + '.', 'err'); return; }
-      if (m[2] === postId()) { log('that is our post. paste the link of your own reply.', 'err'); return; }
-      if (tooSoon('reply')) return;
-      var clean = 'https://x.com/' + m[1] + '/status/' + m[2];
-      busy(btn, async function () {
-        log('$ verify --comment ' + m[2], 'cmd');
-        var resp = await api('comment', { username: WL.username, commentUrl: clean });
-        if (!resp || !resp.ok) { log('error: ' + ((resp && resp.error) || 'unknown error'), 'err'); return; }
-        WL.comment = clean;
-        log('comment recorded. task 03 verified.', 'ok');
-        applyResp(resp, 4);
-      });
-    });
-    $('#btnV4').addEventListener('click', function () {
-      var btn = this, w = String($('#inWallet').value || '').trim();
-      if (!WALLET_RE.test(w)) { log('invalid wallet. it starts with 0x and has 42 characters.', 'err'); return; }
-      var hp = $('#inHp').value;
-      busy(btn, async function () {
-        log('$ register --wallet ' + shortWallet(w), 'cmd');
-        var resp = await api('wallet', { username: WL.username, wallet: w, website: hp });
-        if (!resp || !resp.ok) { log('error: ' + ((resp && resp.error) || 'unknown error'), 'err'); return; }
-        WL.wallet = w;
-        log('entry saved. applicant id ' + (resp.applicantId || WL.applicantId) + '.', 'ok');
-        log('vault unlocked. roadmap, tokenomics and launchpad are open.', 'ok');
-        applyResp(resp, 5);
-        unlockVault(true);
-        setTimeout(function () { $('#wlResult').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }); }, 250);
-      });
-    });
-
-    $('#btnDownload').addEventListener('click', downloadCard);
-    $('#btnShare').addEventListener('click', function () {
-      var text = 'I just joined the ' + (C.PROJECT_NAME || 'ElyFluff') + ' whitelist.\n\n' +
-        fmt(SUPPLY) + ' NFTs + ' + TICKER + '. Testnet on HyperEVM, mainnet on Elysium.\n\nJoin with my invite: ' + refLink() + '\n\n@' + h;
-      openUrl('https://x.com/intent/tweet?text=' + encodeURIComponent(text));
-    });
-    $('#btnCopyRef').addEventListener('click', async function () {
-      var b = this, link = refLink();
-      try { await navigator.clipboard.writeText(link); b.textContent = 'Copied'; log('invite link copied.', 'ok'); }
-      catch (e) { b.textContent = 'Copy failed'; log(link, 'cmd'); }
-      setTimeout(function () { b.textContent = 'Copy invite link'; }, 1800);
-    });
-    $('#wlReset').addEventListener('click', function () {
-      store.del(WL_KEY);
-      WL = { step: 1, username: '', opened: {}, comment: '', wallet: '', applicantId: '' };
-      $('#inUser').value = ''; $('#inComment').value = ''; $('#inWallet').value = '';
-      logEl.textContent = '';
-      store.del('ef_unlocked');
-      location.hash = '';
-      location.reload();
-    });
-    log(WL.step >= 5 ? 'welcome back. your card is ready.' : 'whitelist terminal ready. complete each task in order.', 'cmd');
-    render();
-  }
-
-  /* ---------- social card ---------- */
-  var cardBusy = false;
-  async function drawCard() {
-    var cv = $('#card');
-    if (!cv || cardBusy) return;
-    cardBusy = true;
-    try {
-      if (document.fonts && document.fonts.load) {
-        await Promise.all([
-          document.fonts.load('800 80px "Geist"'), document.fonts.load('600 30px "Geist"'),
-          document.fonts.load('500 20px "Geist Mono"'), document.fonts.load('600 28px "Geist Mono"')
-        ]).catch(function () {});
-      }
-      var x = cv.getContext('2d'), W = 1200, H = 675;
-      var user = WL.username || 'anon', seed = hashStr(user.toLowerCase());
-      var lg = x.createLinearGradient(0, 0, W, H);
-      lg.addColorStop(0, '#062F2A'); lg.addColorStop(0.55, '#041A17'); lg.addColorStop(1, '#1E0808');
-      x.fillStyle = lg; x.fillRect(0, 0, W, H);
-      function glow(cx, cy, r, c) { var g = x.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, c); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, W, H); }
-      glow(980, 120, 520, 'rgba(94,230,207,0.32)');
-      glow(1150, 650, 420, 'rgba(163,28,27,0.45)');
-      glow(80, 620, 380, 'rgba(110,200,245,0.12)');
-      x.fillStyle = 'rgba(151,252,228,0.09)';
-      for (var gx = 24; gx < W; gx += 28) for (var gy = 24; gy < H; gy += 28) x.fillRect(gx, gy, 1.5, 1.5);
-
-      function rr(px, py, w, h, r) { x.beginPath(); x.moveTo(px + r, py); x.arcTo(px + w, py, px + w, py + h, r); x.arcTo(px + w, py + h, px, py + h, r); x.arcTo(px, py + h, px, py, r); x.arcTo(px, py, px + w, py, r); x.closePath(); }
-      rr(20, 20, W - 40, H - 40, 28); x.strokeStyle = 'rgba(94,230,207,0.45)'; x.lineWidth = 2; x.stroke();
-      x.fillStyle = COL.crimson; rr(20, 20, 10, H - 40, 5); x.fill();
-
-      function txt(s, px, py, font, color, ls) {
-        x.font = font; x.fillStyle = color;
-        if ('letterSpacing' in x) x.letterSpacing = (ls || 0) + 'px';
-        x.fillText(s, px, py);
-        if ('letterSpacing' in x) x.letterSpacing = '0px';
-      }
-      function fit(s, maxW, size, weight, fam) { var f; do { f = weight + ' ' + size + 'px ' + fam; x.font = f; size -= 2; } while (x.measureText(s).width > maxW && size > 20); return f; }
-      x.textBaseline = 'alphabetic';
-
-      var lx = 72;
-      x.fillStyle = COL.hyper; rr(lx, 64, 36, 36, 10); x.fill();
-      x.fillStyle = '#062A26'; x.fillRect(lx + 10, 78, 5, 8); x.fillRect(lx + 21, 78, 5, 8);
-      x.fillStyle = COL.crimson; x.beginPath(); x.arc(lx + 36, 66, 7, 0, Math.PI * 2); x.fill();
-      txt('ElyFluff', lx + 50, 93, '700 30px "Geist", sans-serif', '#FFFFFF', -0.5);
-
-      x.fillStyle = 'rgba(163,28,27,0.85)'; rr(lx, 130, 268, 38, 19); x.fill();
-      x.fillStyle = '#FF8A86'; x.beginPath(); x.arc(lx + 22, 149, 5, 0, Math.PI * 2); x.fill();
-      txt('WHITELIST ACCESS', lx + 38, 155, '600 17px "Geist Mono", monospace', '#FFFFFF', 2);
-
-      var ht = '@' + user;
-      var hg = x.createLinearGradient(0, 220, 0, 290);
-      hg.addColorStop(0, '#FFFFFF'); hg.addColorStop(1, COL.hyper2);
-      x.font = fit(ht, 600, 76, '800', '"Geist", sans-serif'); x.fillStyle = hg;
-      if ('letterSpacing' in x) x.letterSpacing = '-2px';
-      x.fillText(ht, lx, 290);
-      if ('letterSpacing' in x) x.letterSpacing = '0px';
-
-      function field(label, value, px, py, color) {
-        txt(label, px, py, '500 15px "Geist Mono", monospace', 'rgba(163,194,188,0.85)', 2);
-        txt(value, px, py + 38, '600 28px "Geist Mono", monospace', color || '#EAFBF7', 0);
-      }
-      field('APPLICANT ID', WL.applicantId || 'EF-00000', lx, 350, COL.hyper2);
-      field('WALLET', shortWallet(WL.wallet) || '0x...', lx + 300, 350);
-      field('NETWORK', 'HyperEVM Testnet  >  Elysium', lx, 450, COL.sky);
-
-      var bx = 744, by = 86, bs = 384;
-      var sp = document.createElement('canvas'); sp.width = sp.height = bs;
-      var spx = sp.getContext('2d', { willReadFrequently: true });
-      var imgs = (C.NFT_IMAGES || []).filter(function (i) { return i && i.src; });
-      var specId = 1 + (seed % SUPPLY), drawn = false;
-      if (imgs.length) {
-        var item = imgs[seed % imgs.length], im = await loadImg(item.src);
-        if (im) { coverDraw(spx, im, bs); drawn = true; specId = item.id || specId; }
-      }
-      if (!drawn) drawFluff(spx, bs, seed);
-      x.save(); x.shadowColor = 'rgba(94,230,207,0.45)'; x.shadowBlur = 50;
-      rr(bx - 10, by - 10, bs + 20, bs + 20, 26); x.fillStyle = 'rgba(3,18,16,0.9)'; x.fill(); x.restore();
-      x.save(); rr(bx, by, bs, bs, 18); x.clip(); x.drawImage(sp, bx, by); x.restore();
-      rr(bx - 10, by - 10, bs + 20, bs + 20, 26); x.strokeStyle = 'rgba(94,230,207,0.6)'; x.lineWidth = 2; x.stroke();
-      x.fillStyle = 'rgba(3,18,16,0.82)'; rr(bx + 14, by + bs - 50, 170, 36, 10); x.fill();
-      txt('#' + pad(specId) + ' / ' + fmt(SUPPLY), bx + 28, by + bs - 25, '600 16px "Geist Mono", monospace', COL.hyper2, 1);
-
-      x.strokeStyle = 'rgba(94,230,207,0.2)'; x.lineWidth = 1; x.beginPath(); x.moveTo(lx, 540); x.lineTo(W - 72, 540); x.stroke();
-      txt(TICKER + '  ·  ' + fmt(SUPPLY) + ' NFTs  ·  40% to holders', lx, 590, '600 20px "Geist Mono", monospace', '#EAFBF7', 1);
-      txt('INVITE  ' + (WL.applicantId || 'EF-00000') + '   ·   STATUS  PENDING SELECTION', lx, 622, '500 15px "Geist Mono", monospace', 'rgba(163,194,188,0.85)', 1.5);
-      x.textAlign = 'right';
-      txt(new Date().toISOString().slice(0, 10), W - 72, 622, '500 15px "Geist Mono", monospace', 'rgba(163,194,188,0.85)', 1.5);
-      x.textAlign = 'left';
-    } finally { cardBusy = false; }
-  }
-  function downloadCard() {
-    var cv = $('#card');
-    if (!cv) return;
-    cv.toBlob(function (b) {
-      if (!b) { log('could not create the image. try again.', 'err'); return; }
-      var u = URL.createObjectURL(b), a = document.createElement('a');
-      a.href = u; a.download = 'elyfluff-card-' + (WL.username || 'holder') + '.png';
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(function () { URL.revokeObjectURL(u); }, 5000);
-      log('card downloaded.', 'ok');
-    }, 'image/png');
   }
 
   /* ---------- agent ---------- */
@@ -1292,21 +1228,23 @@
   }
 
   /* ---------- start ---------- */
+  async function run() {
+    OUT = $('#out'); SCREEN = $('#screen'); PROMPT = $('#prompt');
+    FAST = !!WL.username;
+    await boot();
+    liveValues();
+    await identify();
+    if (!WL.complete) FAST = false;
+    await tasksStage();
+    await walletStage();
+    await permitStage();
+    await vaultStage();
+    FAST = false;
+  }
   function start() {
     fillConfig();
-    nav();
-    heroTerm();
-    countdown();
-    blockFeed();
-    tokenomics();
-    scanner();
-    launchpad();
-    restoreAccess();
-    whitelist();
-    if (isUnlocked()) unlockVault(false);
-    liveStats();
     agent();
-    reveal();
+    run();
     var rt;
     window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { buildMap(false); }, 150); });
   }

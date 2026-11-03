@@ -207,8 +207,11 @@ function check_(u) {
   if (!row) return { ok: true, status: 'NOT_FOUND' };
   var d = sh.getRange(row, 1, 1, NCOL).getValues()[0];
   var tier = String(d[COL.TIER - 1] || '').trim().toUpperCase();
-  if (tier === 'GTD' || tier === 'FCFS') return { ok: true, status: tier };
-  if (d[COL.STATUS - 1] === 'COMPLETE') return { ok: true, status: 'PENDING' };
+  var done = d[COL.STATUS - 1] === 'COMPLETE';
+  var w = String(d[COL.WALLET - 1] || '');
+  var extra = done ? { id: String(d[COL.ID - 1] || ''), wallet: w ? w.slice(0, 6) + '...' + w.slice(-4) : '' } : {};
+  if (tier === 'GTD' || tier === 'FCFS') return Object.assign({ ok: true, status: tier }, extra);
+  if (done) return Object.assign({ ok: true, status: 'PENDING' }, extra);
   return { ok: true, status: 'IN_PROGRESS' };
 }
 
