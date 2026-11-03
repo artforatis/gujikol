@@ -2,503 +2,71 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://rpc.hyperliquid-testnet.xyz; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta http-equiv="Cache-Control" content="no-cache">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<meta name="theme-color" content="#041513">
-<title>ElyFluff | Whitelist Live</title>
-<meta name="description" content="ElyFluff: 3,000 NFTs and the $FLUFF token. Testnet on HyperEVM, mainnet on Elysium. Complete the tasks and join the whitelist.">
-<meta property="og:title" content="ElyFluff | Whitelist Live">
-<meta property="og:description" content="3,000 NFTs and the $FLUFF token. Testnet on HyperEVM, mainnet on Elysium.">
+<meta name="theme-color" content="#062723">
+<title>$FLUFF Whitelist | ElyFluff</title>
+<meta name="description" content="Join the ElyFluff whitelist. 3,000 NFTs and the $FLUFF token. Testnet on HyperEVM, mainnet on Elysium.">
+<meta property="og:title" content="$FLUFF Whitelist | ElyFluff">
+<meta property="og:description" content="Join the ElyFluff whitelist. Testnet on HyperEVM, mainnet on Elysium.">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23062A26'/%3E%3Ccircle cx='16' cy='17' r='10' fill='%235EE6CF'/%3E%3Crect x='11' y='14' width='3' height='4' rx='1' fill='%23062A26'/%3E%3Crect x='18' y='14' width='3' height='4' rx='1' fill='%23062A26'/%3E%3Ccircle cx='24' cy='8' r='4' fill='%23A31C1B'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23171717'/%3E%3Ccircle cx='16' cy='17' r='10' fill='%235EE6CF'/%3E%3Crect x='11' y='14' width='3' height='4' fill='%23171717'/%3E%3Crect x='18' y='14' width='3' height='4' fill='%23171717'/%3E%3Crect x='22' y='3' width='7' height='7' fill='%23A31C1B'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&family=IM+Fell+English+SC&family=IM+Fell+English:ital@0;1&display=swap">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Archivo+Black&family=Rubik+Mono+One&family=IM+Fell+English+SC&family=IM+Fell+English:ital@0;1&display=swap">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 
-<div class="aurora" aria-hidden="true"><i class="a1"></i><i class="a2"></i><i class="a3"></i><i class="a4"></i></div>
-<div class="grid-bg" aria-hidden="true"></div>
+<div class="rays" aria-hidden="true"></div>
 
-<!-- NAV -->
-<header class="nav" id="nav">
-  <div class="nav-in">
-    <a class="logo" href="#top" aria-label="ElyFluff home">
-      <span class="logo-mark" aria-hidden="true"><i></i></span>
-      <span class="logo-text">ElyFluff</span>
-    </a>
-    <nav class="nav-links" id="navLinks" aria-label="Main">
-      <a href="#scan">Collection</a>
-      <a href="#whitelist">Whitelist</a>
-      <a href="#locked" class="lock-link">Vault <i class="nl-lock">locked</i></a>
-      <a href="#tokenomics" class="gated" hidden>Tokenomics</a>
-      <a href="#launchpad" class="gated" hidden>Testnet</a>
-      <a href="#roadmap" class="gated" hidden>Map</a>
-      <a href="#live" class="gated" hidden>Live</a>
-    </nav>
-    <div class="nav-actions">
-      <a class="btn btn-red btn-sm" href="#whitelist"><span class="pulse-dot"></span>Join whitelist</a>
-      <button class="menu-btn" id="menuBtn" type="button" aria-label="Open menu" aria-expanded="false"><i></i><i></i></button>
-    </div>
+<div class="term" id="term">
+  <div class="bar">
+    <span class="dots" aria-hidden="true"><i class="d1"></i><i></i><i></i></span>
+    <span class="bar-title">elyfluff@whitelist: ~</span>
+    <span class="bar-right">
+      <button class="bar-ai" type="button" data-open-agent>ask ai</button>
+      <a class="bar-x" href="#" data-x-profile target="_blank" rel="noopener noreferrer"><span data-cfg="X_HANDLE_AT">@ElyFluff</span></a>
+    </span>
   </div>
-</header>
 
-<!-- LIVE BAR -->
-<div class="livebar" aria-label="Live status">
-  <div class="livebar-track" id="livebarTrack">
-    <span class="lb-item"><b class="lb-dot red"></b>WHITELIST <em class="red-t">LIVE</em></span>
-    <span class="lb-item lb-block" hidden><b class="lb-dot"></b>HYPEREVM TESTNET <em class="lb-block-n">#0</em></span>
-    <span class="lb-item"><b class="lb-dot sky"></b>ELYSIUM MAINNET <em class="lb-cd">NOV 09</em></span>
-    <span class="lb-item lb-apps" hidden><b class="lb-dot"></b>APPLICANTS <em class="lb-apps-n">0</em></span>
-    <span class="lb-item"><b class="lb-dot"></b>SUPPLY <em><span data-cfg="NFT_SUPPLY_FMT">3,000</span> NFTS</em></span>
-    <span class="lb-item"><b class="lb-dot red"></b>TOKEN <em data-cfg="TICKER">$FLUFF</em></span>
-    <span class="lb-item"><b class="lb-dot"></b>GTD MINT <em data-cfg="GTD_MINT_PRICE">0.33 HYPE</em></span>
+  <div class="screen" id="screen">
+    <header class="head">
+      <canvas class="avatar" id="avatar" width="192" height="192" aria-hidden="true"></canvas>
+      <div class="head-txt">
+        <h1 class="title">ElyFluff</h1>
+        <p class="sub">whitelist terminal · hyperevm testnet → elysium</p>
+      </div>
+    </header>
+    <hr class="rule">
+
+    <div id="out" aria-live="polite"></div>
+    <div id="prompt"></div>
   </div>
 </div>
 
-<main id="top">
+<!-- AI AGENT -->
+<button class="fab" id="agentFab" type="button" data-open-agent aria-label="Ask ElyFluff AI">ask ai<span class="caret"></span></button>
 
-  <!-- HERO -->
-  <section class="hero">
-    <div class="hero-left reveal">
-      <div class="badge"><span class="pulse-dot"></span>Whitelist is live on HyperEVM Testnet</div>
-      <h1 class="hero-title"><span class="t-ely">Ely</span><span class="t-fluff">Fluff</span></h1>
-      <p class="hero-sub">3,000 fluffs. One token. <b data-cfg="TICKER">$FLUFF</b>. Proven on HyperEVM Testnet, launching on Elysium.</p>
-
-      <div class="term glass">
-        <div class="term-top">
-          <span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span>
-          <span class="term-tab">elyfluff — zsh</span>
-          <span class="term-live"><b></b>live</span>
-        </div>
-        <div class="term-body" id="heroTerm" aria-live="off"></div>
-      </div>
-
-      <div class="hero-cta">
-        <a class="btn btn-red" href="#whitelist">Join the whitelist <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-        <button class="btn btn-glass" type="button" data-open-agent><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 10h8M8 13h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Ask ElyFluff AI</button>
-      </div>
-    </div>
-
-    <div id="scan" class="scanner glass reveal">
-      <div class="scan-head">
-        <div class="scan-title"><span class="mono">specimen.scan</span></div>
-        <div class="pill pill-red"><span class="pulse-dot"></span>LIVE</div>
-      </div>
-      <div class="scan-stage">
-        <canvas id="specimen" width="480" height="480" aria-label="Live preview of ElyFluff NFTs being scanned"></canvas>
-        <div class="hud" aria-hidden="true">
-          <i class="c1"></i><i class="c2"></i><i class="c3"></i><i class="c4"></i>
-          <div class="ring"></div>
-        </div>
-        <div class="scan-tag" id="scanTag">SCANNING</div>
-      </div>
-      <div class="scan-info">
-        <div class="si-top">
-          <div><span class="si-id" id="roId">#0000</span><span class="si-of">/ <span data-cfg="NFT_SUPPLY_FMT">3,000</span></span></div>
-          <span class="si-count mono">scanned <b id="roCount">0</b></span>
-        </div>
-        <div class="si-bar"><div class="si-fill" id="roFill"></div></div>
-        <ul class="si-traits" id="roTraits"></ul>
-        <div class="si-sig mono" id="roSig">sig 0x0000000000000000</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- METRICS -->
-  <section class="metrics reveal" aria-label="Live numbers">
-    <div class="metric glass">
-      <span class="m-k"><b class="lb-dot red"></b>Mainnet countdown</span>
-      <span class="m-v mono" id="mCountdown">--d --h --m</span>
-      <span class="m-s">Elysium goes live Nov 9</span>
-    </div>
-    <div class="metric glass">
-      <span class="m-k"><b class="lb-dot"></b>Whitelist applicants</span>
-      <span class="m-v mono" id="mApps">--</span>
-      <span class="m-s" id="mAppsSub">Be one of the first</span>
-    </div>
-    <div class="metric glass">
-      <span class="m-k"><b class="lb-dot sky"></b>HyperEVM Testnet</span>
-      <span class="m-v mono" id="mBlock">--</span>
-      <span class="m-s" id="mBlockSub">Latest block</span>
-    </div>
-    <div class="metric glass">
-      <span class="m-k"><b class="lb-dot"></b>Collection</span>
-      <span class="m-v mono"><span data-cfg="NFT_SUPPLY_FMT">3,000</span></span>
-      <span class="m-s">Fluffs in total supply</span>
-    </div>
-  </section>
-
-  <!-- WHITELIST -->
-  <section id="whitelist" class="section">
-    <div class="sec-head reveal">
-      <span class="sec-idx">01</span>
-      <div>
-        <p class="sec-cmd mono">$ sudo elyfluff whitelist --apply</p>
-        <h2>Join the whitelist</h2>
-      </div>
-    </div>
-
-    <div class="wl-wrap">
-      <div class="wl glass reveal">
-        <div class="wl-top">
-          <div class="wl-steps" id="wlSegs"><i></i><i></i><i></i><i></i></div>
-          <span class="wl-ptext mono" id="wlPText">Step 1 of 4</span>
-          <button class="wl-reset" id="wlReset" type="button" hidden>Start over</button>
-        </div>
-        <div class="demo-flag mono" id="demoFlag" hidden>Demo mode: entries are not saved yet.</div>
-
-        <!-- TASK 1 -->
-        <div class="task" id="task1">
-          <div class="task-head">
-            <span class="task-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 20c1-4 4-6 7-6s6 2 7 6M19 8v6M16 11h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
-            <div class="task-txt"><span class="task-no">TASK 01</span><span class="task-title">Follow <span data-cfg="X_HANDLE_AT">@ElyFluff</span> on X</span></div>
-            <span class="task-state" data-state>Locked</span>
-          </div>
-          <div class="task-note mono"></div>
-          <div class="task-body">
-            <button class="btn btn-x" id="btnFollow" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l16 16M20 4L4 20" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>Follow on X</button>
-            <div class="input"><span class="in-pre">@</span><input id="inUser" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="60" placeholder="your X username" aria-label="Your X username"></div>
-            <button class="btn btn-red btn-block" id="btnV1" type="button" disabled>Verify follow</button>
-          </div>
-        </div>
-
-        <!-- TASK 2 -->
-        <div class="task" id="task2">
-          <div class="task-head">
-            <span class="task-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
-            <div class="task-txt"><span class="task-no">TASK 02</span><span class="task-title">Like and repost our post</span></div>
-            <span class="task-state" data-state>Locked</span>
-          </div>
-          <div class="task-note mono"></div>
-          <div class="task-body">
-            <div class="btn-pair">
-              <button class="btn btn-x" id="btnLike" type="button"><span class="chk" id="chkLike"></span>Like post</button>
-              <button class="btn btn-x" id="btnRepost" type="button"><span class="chk" id="chkRepost"></span>Repost</button>
-            </div>
-            <button class="btn btn-red btn-block" id="btnV2" type="button" disabled>Verify like and repost</button>
-          </div>
-        </div>
-
-        <!-- TASK 3 -->
-        <div class="task" id="task3">
-          <div class="task-head">
-            <span class="task-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
-            <div class="task-txt"><span class="task-no">TASK 03</span><span class="task-title">Comment on our post</span></div>
-            <span class="task-state" data-state>Locked</span>
-          </div>
-          <div class="task-note mono"></div>
-          <div class="task-body">
-            <button class="btn btn-x" id="btnReply" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Comment on X</button>
-            <p class="task-hint">After posting, tap Share on your reply, then Copy link. Come back and tap Paste.</p>
-            <div class="field-row">
-              <div class="input"><input id="inComment" type="url" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="200" placeholder="your reply link" aria-label="Your reply link"></div>
-              <button class="btn btn-glass" id="btnPaste" type="button">Paste</button>
-            </div>
-            <button class="btn btn-red btn-block" id="btnV3" type="button" disabled>Verify comment</button>
-          </div>
-        </div>
-
-        <!-- TASK 4 -->
-        <div class="task" id="task4">
-          <div class="task-head">
-            <span class="task-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 12.5h2" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M3 9h18" stroke="currentColor" stroke-width="2"/></svg></span>
-            <div class="task-txt"><span class="task-no">TASK 04</span><span class="task-title">Register your wallet</span></div>
-            <span class="task-state" data-state>Locked</span>
-          </div>
-          <div class="task-note mono"></div>
-          <div class="task-body">
-            <p class="task-hint">Your EVM wallet for HyperEVM Testnet. Never share your seed phrase.</p>
-            <div class="field-row">
-              <div class="input"><input id="inWallet" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="42" placeholder="0x..." aria-label="EVM wallet address"></div>
-              <button class="btn btn-glass" id="btnPasteW" type="button">Paste</button>
-            </div>
-            <label class="hp" aria-hidden="true">Website <input id="inHp" type="text" tabindex="-1" autocomplete="off"></label>
-            <button class="btn btn-red btn-block" id="btnV4" type="button">Submit and get my card</button>
-          </div>
-        </div>
-
-        <!-- RESULT -->
-        <div class="result" id="wlResult" hidden>
-          <div class="res-head"><span class="pill pill-hyper">Access logged</span><span>Your ElyFluff card is ready</span></div>
-          <div class="card-frame"><canvas id="card" width="1200" height="675" aria-label="Your ElyFluff whitelist card"></canvas></div>
-          <div class="btn-pair">
-            <button class="btn btn-red" id="btnDownload" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Download card</button>
-            <button class="btn btn-x" id="btnShare" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l16 16M20 4L4 20" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>Share on X</button>
-          </div>
-          <a class="btn btn-glass btn-block vault-btn" href="#vault"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Open the vault</a>
-          <div class="ref-box">
-            <span class="b-tag">YOUR INVITE CODE</span>
-            <div class="ref-row">
-              <span class="ref-code mono" id="refCode">EF-00000</span>
-              <button class="btn btn-glass btn-sm" id="btnCopyRef" type="button">Copy invite link</button>
-            </div>
-            <p class="task-hint">Friends who join with your link count for you on the leaderboard.</p>
-          </div>
-        </div>
-
-        <div class="wl-log mono" id="wlLog" aria-live="polite"></div>
-      </div>
-
-      <aside class="wl-side reveal">
-        <div class="side-card glass">
-          <span class="b-tag">WHY JOIN</span>
-          <ul class="why">
-            <li><b>GTD</b> mint the testnet NFT for <span data-cfg="GTD_MINT_PRICE">0.33 HYPE</span></li>
-            <li><b>FCFS</b> receive testnet <span data-cfg="TICKER">$FLUFF</span></li>
-            <li><b>Mainnet</b> holders qualify for Elysium</li>
-            <li><b>40%</b> of tokens go to NFT holders</li>
-          </ul>
-        </div>
-        <div class="side-card glass">
-          <span class="b-tag">STAY SAFE</span>
-          <p class="task-hint">We will never DM you first or ask for your seed phrase. Only trust <span data-cfg="X_HANDLE_AT">@ElyFluff</span>.</p>
-        </div>
-      </aside>
-    </div>
-  </section>
-
-
-  <!-- LOCKED VAULT TEASER -->
-  <section id="locked" class="section">
-    <div class="vault-lock glass reveal">
-      <div class="vl-top">
-        <span class="vl-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
-        <div>
-          <p class="sec-cmd mono">$ cat ./vault --access denied</p>
-          <h2>The ElyFluff vault is locked</h2>
-          <p class="vl-sub">Complete all 4 whitelist tasks to unlock the full project: tokenomics, the testnet launchpad, the treasure map roadmap and the live community board.</p>
-        </div>
-      </div>
-      <div class="vl-grid">
-        <div class="vl-item"><span class="vl-n mono">02</span><b>About ElyFluff</b><i class="sk"></i><i class="sk s2"></i></div>
-        <div class="vl-item"><span class="vl-n mono">03</span><b>Tokenomics</b><i class="sk"></i><i class="sk s2"></i></div>
-        <div class="vl-item"><span class="vl-n mono">04</span><b>Testnet launchpad</b><i class="sk"></i><i class="sk s2"></i></div>
-        <div class="vl-item vl-map"><span class="vl-n mono">05</span><b>Treasure map</b><i class="sk"></i><i class="sk s2"></i><span class="vl-x" aria-hidden="true">X</span></div>
-        <div class="vl-item"><span class="vl-n mono">06</span><b>Live community</b><i class="sk"></i><i class="sk s2"></i></div>
-      </div>
-      <div class="vl-actions">
-        <a class="btn btn-red" href="#whitelist">Unlock with tasks <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-        <div class="restore">
-          <span class="task-hint">Already finished on another device?</span>
-          <div class="field-row">
-            <div class="input"><span class="in-pre">@</span><input id="inRestore" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="40" placeholder="your X username" aria-label="Your X username"></div>
-            <button class="btn btn-glass" id="btnRestore" type="button">Restore</button>
-          </div>
-          <div class="restore-out mono" id="restoreOut"></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <div id="vault" hidden>
-    <div class="vault-open reveal" id="vaultOpen">
-      <span class="pill pill-hyper">ACCESS GRANTED</span>
-      <span class="mono">vault unlocked · welcome to ElyFluff</span>
-    </div>
-
-  <!-- ABOUT -->
-  <section id="about" class="section">
-    <div class="sec-head reveal">
-      <span class="sec-idx">02</span>
-      <div>
-        <p class="sec-cmd mono">$ cat about.md</p>
-        <h2>Built to be earned, not bought</h2>
-      </div>
-    </div>
-    <div class="bento">
-      <article class="b-card b-wide glass reveal">
-        <span class="b-tag">THE PROJECT</span>
-        <h3>An NFT collection and a token, working as one</h3>
-        <p><b class="hl">ElyFluff</b> is a 3,000-piece NFT collection paired with the <b class="hl-sky" data-cfg="TICKER">$FLUFF</b> token, built for the Elysium mainnet. Every holder is proven first on HyperEVM Testnet.</p>
-      </article>
-      <article class="b-card glass reveal">
-        <span class="b-big">40%</span>
-        <h3>To NFT holders</h3>
-        <p>The largest share of <span data-cfg="TICKER">$FLUFF</span> goes to the people holding the collection.</p>
-      </article>
-      <article class="b-card glass reveal">
-        <span class="b-big sky">Testnet</span>
-        <h3>First on HyperEVM</h3>
-        <p>Testnet NFT and token holders carry their place to Elysium.</p>
-      </article>
-      <article class="b-card b-red glass reveal">
-        <span class="b-big">GTD + FCFS</span>
-        <h3>Two ways in</h3>
-        <p>Complete the social tasks. Selected wallets get GTD mint or FCFS token access.</p>
-      </article>
-    </div>
-  </section>
-
-
-  <!-- TOKENOMICS -->
-  <section id="tokenomics" class="section">
-    <div class="sec-head reveal">
-      <span class="sec-idx">03</span>
-      <div>
-        <p class="sec-cmd mono">$ elyfluff tokenomics</p>
-        <h2><span data-cfg="TICKER">$FLUFF</span> allocation</h2>
-      </div>
-    </div>
-    <div class="tok glass reveal">
-      <div class="donut-wrap">
-        <svg class="donut" id="donut" viewBox="0 0 200 200" aria-hidden="true"></svg>
-        <div class="donut-c">
-          <span class="dc-t" data-cfg="TICKER">$FLUFF</span>
-          <span class="dc-s">Supply <b data-cfg="TOKEN_SUPPLY">TBA</b></span>
-        </div>
-      </div>
-      <div class="alloc" id="allocList"></div>
-    </div>
-  </section>
-
-
-  <!-- TESTNET LAUNCHPAD -->
-  <section id="launchpad" class="section">
-    <div class="sec-head reveal">
-      <span class="sec-idx">04</span>
-      <div>
-        <p class="sec-cmd mono">$ elyfluff launchpad --network hyperevm-testnet</p>
-        <h2>Testnet launchpad</h2>
-      </div>
-    </div>
-
-    <div class="pad">
-      <article class="mint-card mint-gtd glass reveal">
-        <div class="mc-top">
-          <span class="tier tier-red">GTD</span>
-          <span class="pill pill-soft" data-mint-status>Coming soon</span>
-        </div>
-        <h3>Guaranteed mint</h3>
-        <p class="mc-desc">Selected wallets mint the ElyFluff testnet NFT.</p>
-        <dl class="mc-rows">
-          <div><dt>Price</dt><dd data-cfg="GTD_MINT_PRICE">0.33 HYPE</dd></div>
-          <div><dt>Asset</dt><dd>ElyFluff NFT</dd></div>
-          <div><dt>Network</dt><dd>HyperEVM Testnet</dd></div>
-          <div><dt>Access</dt><dd>GTD list only</dd></div>
-        </dl>
-        <button class="btn btn-red btn-block mint-btn" id="btnMintGtd" type="button" disabled>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-          <span>Mint opens soon</span>
-        </button>
-      </article>
-
-      <article class="mint-card mint-fcfs glass reveal">
-        <div class="mc-top">
-          <span class="tier tier-sky">FCFS</span>
-          <span class="pill pill-soft" data-mint-status>Coming soon</span>
-        </div>
-        <h3>Token claim</h3>
-        <p class="mc-desc">Selected wallets receive testnet <span data-cfg="TICKER">$FLUFF</span>.</p>
-        <dl class="mc-rows">
-          <div><dt>Delivery</dt><dd>Claim or distribution</dd></div>
-          <div><dt>Asset</dt><dd>Testnet <span data-cfg="TICKER">$FLUFF</span></dd></div>
-          <div><dt>Network</dt><dd>HyperEVM Testnet</dd></div>
-          <div><dt>Access</dt><dd>First come, first served</dd></div>
-        </dl>
-        <button class="btn btn-sky btn-block mint-btn" id="btnClaimFcfs" type="button" disabled>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-          <span>Claim opens soon</span>
-        </button>
-      </article>
-
-      <article class="check-card glass reveal">
-        <span class="b-tag">ELIGIBILITY</span>
-        <h3>Check your status</h3>
-        <p class="mc-desc">Enter your X username to see if you are selected.</p>
-        <div class="field-row">
-          <div class="input"><span class="in-pre">@</span><input id="inCheck" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="40" placeholder="username"></div>
-          <button class="btn btn-glass" id="btnCheck" type="button">Check</button>
-        </div>
-        <div class="check-out mono" id="checkOut" aria-live="polite">Selections are announced after the whitelist closes.</div>
-      </article>
-    </div>
-    <p class="note reveal"><b>!</b> Testnet NFT and testnet <span data-cfg="TICKER">$FLUFF</span> holders qualify for Elysium mainnet. Testnet assets have no monetary value.</p>
-  </section>
-
-
-  <!-- TREASURE MAP -->
-  <section id="roadmap" class="section">
-    <div class="sec-head reveal">
-      <span class="sec-idx">05</span>
-      <div>
-        <p class="sec-cmd mono">$ elyfluff roadmap --treasure-map</p>
-        <h2>The road to Elysium</h2>
-      </div>
-    </div>
-    <div class="tmap-wrap reveal">
-      <div class="tmap" id="tmap" aria-label="Treasure map of the ElyFluff roadmap"></div>
-      <div class="tm-detail glass" id="tmDetail" aria-live="polite"></div>
-    </div>
-  </section>
-
-  <!-- LIVE -->
-  <section id="live" class="section">
-    <div class="sec-head reveal">
-      <span class="sec-idx">06</span>
-      <div>
-        <p class="sec-cmd mono">$ elyfluff live --watch</p>
-        <h2>Live community</h2>
-      </div>
-    </div>
-    <div class="live-grid">
-      <div class="live-card glass reveal">
-        <div class="lc-head"><h3>Whitelist feed</h3><span class="pill pill-red"><span class="pulse-dot"></span>LIVE</span></div>
-        <ul class="feed mono" id="feed"></ul>
-      </div>
-      <div class="live-card glass reveal">
-        <div class="lc-head"><h3>Top inviters</h3><span class="pill pill-soft">Updated live</span></div>
-        <ol class="board mono" id="board"></ol>
-      </div>
-    </div>
-  </section>
-
-  </div>
-
-</main>
-
-<footer class="footer">
-  <div class="foot-in">
-    <div>
-      <a class="logo" href="#top"><span class="logo-mark" aria-hidden="true"><i></i></span><span class="logo-text">ElyFluff</span></a>
-      <p class="foot-note">3,000 NFTs and <span data-cfg="TICKER">$FLUFF</span>. Testnet on HyperEVM, mainnet on Elysium.</p>
-    </div>
-    <div class="foot-links">
-      <button class="btn btn-x btn-sm" type="button" data-x-profile>Follow <span data-cfg="X_HANDLE_AT">@ElyFluff</span></button>
-      <button class="btn btn-glass btn-sm" type="button" data-open-agent>Ask ElyFluff AI</button>
-    </div>
-  </div>
-  <p class="foot-copy">&copy; 2026 ElyFluff. Testnet assets have no monetary value.</p>
-</footer>
-
-<!-- AGENT -->
-<button class="agent-fab" id="agentFab" type="button" aria-label="Ask ElyFluff AI" data-open-agent>
-  <span class="fab-ring"></span>
-  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="9" cy="10.5" r="1.2" fill="currentColor"/><circle cx="12" cy="10.5" r="1.2" fill="currentColor"/><circle cx="15" cy="10.5" r="1.2" fill="currentColor"/></svg>
-  <span class="fab-label">Ask AI</span>
-</button>
-
-<div class="agent" id="agent" role="dialog" aria-modal="false" aria-labelledby="agentTitle" hidden>
-  <div class="ag-head">
-    <span class="ag-av" aria-hidden="true"><i></i></span>
-    <div class="ag-t">
-      <b id="agentTitle">ElyFluff AI</b>
-      <span class="ag-st"><b class="lb-dot"></b>Online · project assistant</span>
-    </div>
-    <button class="ag-x" id="agentClose" type="button" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+<div class="agent" id="agent" role="dialog" aria-labelledby="agentTitle" hidden>
+  <div class="bar small">
+    <span class="dots" aria-hidden="true"><i class="d1"></i><i></i><i></i></span>
+    <span class="bar-title" id="agentTitle">elyfluff@ai: ~</span>
+    <button class="ag-x" id="agentClose" type="button" aria-label="Close">close ×</button>
   </div>
   <div class="ag-msgs" id="agentMsgs" aria-live="polite"></div>
   <div class="ag-chips" id="agentChips"></div>
   <form class="ag-form" id="agentForm" autocomplete="off">
-    <input id="agentIn" type="text" maxlength="300" placeholder="Ask about ElyFluff..." aria-label="Your question">
-    <button class="ag-send" type="submit" aria-label="Send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l16-8-6 16-2-7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
+    <label class="ag-ps" for="agentIn">you@elyfluff:~$</label>
+    <input id="agentIn" type="text" maxlength="300" placeholder="ask anything..." autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button class="btn btn-sm" type="submit">send ↵</button>
   </form>
 </div>
 
-<script src="config.js"></script>
-<script src="app.js"></script>
+<script src="config.js?v=5"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
