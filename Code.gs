@@ -5,8 +5,7 @@
 
 var SHEET_NAME = 'Whitelist';
 var WHITELIST_OPEN = true;          // set to false to close the whitelist
-var PROJECT_POST_ID = '';           // optional: your task post ID, blocks people pasting your own post as their comment
-var MIN_STEP_GAP_SEC = 5;           // minimum seconds between two steps
+var MIN_STEP_GAP_SEC = 1;           // minimum seconds between two steps
 var MAX_REQ_PER_MIN_USER = 8;       // per X username
 var MAX_REQ_PER_MIN_GLOBAL = 400;   // all users together
 
@@ -23,20 +22,30 @@ var HEADERS = [
   'X Username',             // D
   'Step 1: Follow',         // E
   'Step 2: Like + Repost',  // F
-  'Step 3: Comment Link',   // G
+  'Step 3: Comment',        // G
   'Step 4: Wallet',         // H
   'Status',                 // I
   'Tier (GTD / FCFS)',      // J  team fills this
   'Notes',                  // K  team fills this
   'Referred By',            // L
-  'Referrals'               // M
+  'Referrals',              // M
+  'Arena $FLUFF',           // N  total from Fluff Arena
+  'Arena Kills',            // O
+  'Arena Rounds',           // P
+  'Arena Best Round'        // Q
 ];
-var COL = { TS: 1, UPDATED: 2, ID: 3, USER: 4, FOLLOW: 5, ENGAGE: 6, COMMENT: 7, WALLET: 8, STATUS: 9, TIER: 10, NOTES: 11, REFBY: 12, REFS: 13 };
+var COL = { TS: 1, UPDATED: 2, ID: 3, USER: 4, FOLLOW: 5, ENGAGE: 6, COMMENT: 7, WALLET: 8, STATUS: 9, TIER: 10, NOTES: 11, REFBY: 12, REFS: 13, GTOK: 14, GKILL: 15, GROUND: 16, GBEST: 17 };
 var NCOL = 13;
+var NALL = 17;
+
+/* Fluff Arena score limits (anti-cheat) */
+var GAME_MAX_ROUND_SEC = 15 * 60;
+var GAME_MAX_PER_KILL = 20;         // 4 coins x 5
+var GAME_MAX_BLUE = 1200;           // max from the blue zone per round
+var GAME_MIN_SEC_PER_KILL = 2;
 
 var USER_RE = /^[A-Za-z0-9_]{1,15}$/;
 var WALLET_RE = /^0x[a-fA-F0-9]{40}$/;
-var REPLY_RE = /^https:\/\/x\.com\/([A-Za-z0-9_]{1,15})\/status\/(\d{5,25})$/;
 var REF_RE = /^EF-\d{5}$/;
 
 var PROJECT_FACTS = [
@@ -45,7 +54,8 @@ var PROJECT_FACTS = [
   'Allocation: 40% NFT holders, 20% token holders, 15% Elysium active users, 15% liquidity, 5% team, 5% vault (marketing).',
   'Elysium mainnet goes live on November 9. ElyFluff NFT and $FLUFF launch there after the testnet phase.',
   'Before mainnet, ElyFluff launches the NFT and token on HyperEVM Testnet to select the whitelist.',
-  'Whitelist tasks on the website: 1) follow the ElyFluff X account, 2) like and repost the task post, 3) comment on the post and submit the reply link, 4) register an EVM wallet. Then the user gets a social card and an invite link.',
+  'Whitelist tasks on the website: 1) follow the ElyFluff X account, 2) like and repost the task post, 3) write a comment that is posted as a reply on X, 4) register an EVM wallet. Then the user gets a permit card and an invite link, and the project vault unlocks.',
+  'Fluff Arena: a 2D jetpack battle game that unlocks after the tasks. A round lasts 15 minutes. Defeated enemies drop $FLUFF that players collect. At the 10:00 mark a red zone strikes part of the map (leave fast or die) and a blue zone opens where $FLUFF rains down. Arena $FLUFF is saved to the player account after each round.',
   'GTD (guaranteed) wallets are selected from task completers and can mint the testnet NFT for 0.33 test HYPE on HyperEVM Testnet.',
   'FCFS (first come, first served) wallets are selected from task completers and receive testnet $FLUFF by claim or distribution.',
   'Testnet NFT holders and testnet $FLUFF holders qualify for Elysium mainnet.',
@@ -79,6 +89,7 @@ function doPost(e) {
     var action = String(body.action || '');
 
     if (action === 'ask') return json_(ask_(body));
+    if (action === 'gstart' || action === 'gend') return json_(game_(action, body));
 
     if (!WHITELIST_OPEN) return fail_('The whitelist is closed.');
     if (body.website) return fail_('Bad request.'); // honeypot
@@ -123,14 +134,10 @@ function doPost(e) {
 
     if (action === 'comment') {
       if (data[COL.ENGAGE - 1] !== 'DONE') return fail_('Complete task 02 first.');
-      var url = String(body.commentUrl || '').trim();
-      var m = url.match(REPLY_RE);
-      if (!m) return fail_('Invalid comment link.');
-      if (m[1].toLowerCase() !== username.toLowerCase()) return fail_('This comment is not from your account.');
-      if (PROJECT_POST_ID && m[2] === PROJECT_POST_ID) return fail_('Paste the link of your own reply.');
-      var used = findRow_(sh, COL.COMMENT, url);
-      if (used && used !== row) return fail_('This comment link is already used.');
-      sh.getRange(row, COL.COMMENT).setValue(url);
+      var text = String(body.comment || '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+      if (text.length < 2) return fail_('Write at least 2 characters.');
+      if (/^[=+\-@]/.test(text)) text = "'" + text;
+      sh.getRange(row, COL.COMMENT).setValue(text);
       sh.getRange(row, COL.UPDATED).setValue(now);
       return json_({ ok: true, step: 4, applicantId: data[COL.ID - 1] });
     }
@@ -174,11 +181,12 @@ function stats_() {
   if (hit) return JSON.parse(hit);
   var sh = getSheet_();
   var last = sh.getLastRow();
-  var out = { ok: true, count: 0, recent: [], top: [] };
+  var out = { ok: true, count: 0, recent: [], top: [], topGame: [] };
   if (last > 1) {
-    var rows = sh.getRange(2, 1, last - 1, NCOL).getValues();
+    var rows = sh.getRange(2, 1, last - 1, NALL).getValues();
     var done = [];
     var tops = [];
+    var games = [];
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
       if (r[COL.STATUS - 1] === 'COMPLETE') {
@@ -188,7 +196,11 @@ function stats_() {
       }
       var n = Number(r[COL.REFS - 1]) || 0;
       if (n > 0) tops.push({ u: mask_(r[COL.USER - 1]), n: n });
+      var gt = Number(r[COL.GTOK - 1]) || 0;
+      if (gt > 0) games.push({ u: mask_(r[COL.USER - 1]), n: gt });
     }
+    games.sort(function (a, b) { return b.n - a.n; });
+    out.topGame = games.slice(0, 10);
     done.sort(function (a, b) { return b.t - a.t; });
     tops.sort(function (a, b) { return b.n - a.n; });
     out.recent = done.slice(0, 8);
@@ -205,14 +217,63 @@ function check_(u) {
   var sh = getSheet_();
   var row = findRow_(sh, COL.USER, username);
   if (!row) return { ok: true, status: 'NOT_FOUND' };
-  var d = sh.getRange(row, 1, 1, NCOL).getValues()[0];
+  var d = sh.getRange(row, 1, 1, NALL).getValues()[0];
   var tier = String(d[COL.TIER - 1] || '').trim().toUpperCase();
   var done = d[COL.STATUS - 1] === 'COMPLETE';
   var w = String(d[COL.WALLET - 1] || '');
-  var extra = done ? { id: String(d[COL.ID - 1] || ''), wallet: w ? w.slice(0, 6) + '...' + w.slice(-4) : '' } : {};
+  var extra = done ? { id: String(d[COL.ID - 1] || ''), wallet: w ? w.slice(0, 6) + '...' + w.slice(-4) : '', game: Number(d[COL.GTOK - 1]) || 0 } : {};
   if (tier === 'GTD' || tier === 'FCFS') return Object.assign({ ok: true, status: tier }, extra);
   if (done) return Object.assign({ ok: true, status: 'PENDING' }, extra);
   return { ok: true, status: 'IN_PROGRESS' };
+}
+
+/* ---------- Fluff Arena ---------- */
+
+function game_(action, body) {
+  var username = cleanUser_(body.username);
+  if (!username) return { ok: false, error: 'Invalid X username.' };
+  if (!rateOk_('g_' + username.toLowerCase(), 6, 'gg', 500)) return { ok: false, error: 'Too many requests. Wait a minute.' };
+  var cache = CacheService.getScriptCache();
+  if (action === 'gstart') {
+    var sh0 = getSheet_();
+    var r0 = findRow_(sh0, COL.USER, username);
+    if (!r0 || sh0.getRange(r0, COL.STATUS).getValue() !== 'COMPLETE') return { ok: false, error: 'Finish the whitelist tasks first.' };
+    var id = Utilities.getUuid().replace(/-/g, '').slice(0, 20);
+    cache.put('m_' + id, JSON.stringify({ u: username.toLowerCase(), t: Date.now() }), 21600);
+    return { ok: true, matchId: id };
+  }
+  var mid = String(body.matchId || '').replace(/[^a-f0-9]/gi, '').slice(0, 20);
+  if (!mid) return { ok: false, error: 'Missing match.' };
+  var raw = cache.get('m_' + mid);
+  if (!raw) return { ok: false, error: 'Match expired or already saved.' };
+  var m = JSON.parse(raw);
+  if (m.u !== username.toLowerCase()) return { ok: false, error: 'Match does not belong to you.' };
+  cache.remove('m_' + mid);
+  var serverSecs = Math.min(GAME_MAX_ROUND_SEC + 30, (Date.now() - m.t) / 1000);
+  var kills = Math.max(0, Math.floor(Number(body.kills) || 0));
+  var tokens = Math.max(0, Math.floor(Number(body.tokens) || 0));
+  var deaths = Math.max(0, Math.floor(Number(body.deaths) || 0));
+  kills = Math.min(kills, Math.floor(serverSecs / GAME_MIN_SEC_PER_KILL));
+  var cap = kills * GAME_MAX_PER_KILL + (serverSecs >= 9 * 60 ? GAME_MAX_BLUE : 0);
+  tokens = Math.min(tokens, cap);
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return { ok: false, error: 'Server is busy. Try again.' };
+  try {
+    var sh = getSheet_();
+    var row = findRow_(sh, COL.USER, username);
+    if (!row) return { ok: false, error: 'Player not found.' };
+    var d = sh.getRange(row, COL.GTOK, 1, 4).getValues()[0];
+    var total = (Number(d[0]) || 0) + tokens;
+    sh.getRange(row, COL.GTOK, 1, 4).setValues([[total, (Number(d[1]) || 0) + kills, (Number(d[2]) || 0) + 1, Math.max(Number(d[3]) || 0, tokens)]]);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var log = ss.getSheetByName('Arena Rounds');
+    if (!log) { log = ss.insertSheet('Arena Rounds'); log.appendRow(['Time', 'X Username', '$FLUFF', 'Kills', 'Deaths', 'Seconds (server)', 'Tokens claimed']); log.setFrozenRows(1); }
+    log.appendRow([new Date(), username, tokens, kills, deaths, Math.round(serverSecs), Math.floor(Number(body.tokens) || 0)]);
+    cache.remove('stats_v2');
+    return { ok: true, total: total, saved: tokens };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /* ---------- AI agent ---------- */
@@ -266,7 +327,7 @@ function getSheet_() {
     sh.getRange('C:D').setNumberFormat('@');
     sh.getRange('G:H').setNumberFormat('@');
     sh.getRange('L:L').setNumberFormat('@');
-  } else if (sh.getRange(1, COL.REFBY).getValue() !== HEADERS[COL.REFBY - 1]) {
+  } else if (sh.getRange(1, HEADERS.length).getValue() !== HEADERS[HEADERS.length - 1]) {
     sh.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS])
       .setFontWeight('bold').setBackground('#062723').setFontColor('#5EE6CF');
   }

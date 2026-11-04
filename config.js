@@ -37,8 +37,14 @@ window.ELYFLUFF_CONFIG = {
   /* Live HyperEVM Testnet block number (public RPC) */
   HYPEREVM_TESTNET_RPC: "https://rpc.hyperliquid-testnet.xyz/evm",
 
-  /* Seconds a user must spend on X before Verify is accepted */
-  MIN_TASK_SECONDS: 6,
+  /* Character art (upload this image next to index.html) */
+  ART_IMAGE: "elyfluff.jpg",
+
+  /* Fluff Arena game */
+  GAME_ROUND_MIN: 15,     /* round length in minutes */
+  GAME_RED_AT_MIN: 10,    /* red zone strikes at this minute */
+  GAME_BLUE_AT_MIN: 10,   /* blue zone ($FLUFF drops) opens at this minute */
+  GAME_BOTS: 7,           /* number of enemy fighters */
 
   /* NFT preview images for the live scanner.
      Upload images into a folder named "nft", then list them here.

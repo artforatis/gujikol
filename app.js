@@ -5,7 +5,6 @@
   var COL = { hyper: '#5EE6CF', hyper2: '#97FCE4', deep: '#1B8F7E', sky: '#6EC8F5', crimson: '#A31C1B', crimson2: '#E04A46', bg: '#062723' };
   var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var SUPPLY = Number(C.NFT_SUPPLY) || 3000;
-  var MIN_SEC = Number(C.MIN_TASK_SECONDS) || 6;
   var TICKER = C.TICKER || '$FLUFF';
   var DEMO = !C.SCRIPT_URL;
   var LAUNCH = Date.parse(C.ELYSIUM_LAUNCH_UTC || '');
@@ -54,6 +53,48 @@
     return Math.floor(s / 86400) + 'd ago';
   }
 
+  /* ---------- character art ---------- */
+  var ART_SRC = C.ART_IMAGE || 'elyfluff.jpg';
+  var ART_BGS = [['Violet', null], ['Mint', '#79DCC8'], ['Crimson', '#C2403C'], ['Sky', '#7CC6F2'], ['Charcoal', '#2E3131'], ['Peach', '#F1B08C'], ['Lime', '#B5D96A'], ['Gold', '#E8C15A']];
+  var artImg = null, artTried = null, artCache = {};
+  function getArt() {
+    if (!artTried) artTried = new Promise(function (res) { var im = new Image(); im.onload = function () { artImg = im; res(im); }; im.onerror = function () { res(null); }; im.src = ART_SRC; });
+    return artTried;
+  }
+  async function artVariant(i, size) {
+    i = Math.abs(i) % ART_BGS.length;
+    var key = i + '_' + size;
+    if (artCache[key]) return artCache[key];
+    var im = await getArt();
+    if (!im) return null;
+    var c = document.createElement('canvas'); c.width = c.height = size;
+    var x = c.getContext('2d', { willReadFrequently: true });
+    x.imageSmoothingEnabled = true;
+    coverDraw(x, im, size);
+    var col = ART_BGS[i][1];
+    if (col) {
+      try {
+        var d = x.getImageData(0, 0, size, size), a = d.data;
+        var br = 0, bgc = 0, bb = 0, n = 0;
+        [[2, 2], [size - 3, 2], [2, size - 3], [size - 3, size - 3]].forEach(function (p) { var o = (p[1] * size + p[0]) * 4; br += a[o]; bgc += a[o + 1]; bb += a[o + 2]; n++; });
+        br /= n; bgc /= n; bb /= n;
+        var tr = parseInt(col.slice(1, 3), 16), tg = parseInt(col.slice(3, 5), 16), tb = parseInt(col.slice(5, 7), 16);
+        for (var o2 = 0; o2 < a.length; o2 += 4) {
+          var r = a[o2], g2 = a[o2 + 1], b = a[o2 + 2];
+          var dr = r - br, dg = g2 - bgc, db = b - bb;
+          if (dr * dr + dg * dg + db * db < 3600 && b - g2 > 50 && r - g2 > -6) {
+            a[o2] = Math.max(0, Math.min(255, tr + dr * 0.8));
+            a[o2 + 1] = Math.max(0, Math.min(255, tg + dg * 0.8));
+            a[o2 + 2] = Math.max(0, Math.min(255, tb + db * 0.8));
+          }
+        }
+        x.putImageData(d, 0, 0);
+      } catch (e) {}
+    }
+    artCache[key] = c;
+    return c;
+  }
+
   /* ---------- config text ---------- */
   function fillConfig() {
     var map = { TICKER: TICKER, NFT_SUPPLY_FMT: fmt(SUPPLY), TOKEN_SUPPLY: C.TOKEN_SUPPLY || 'TBA', X_HANDLE_AT: '@' + handle(), GTD_MINT_PRICE: C.GTD_MINT_PRICE || '0.33 HYPE' };
@@ -62,20 +103,21 @@
     var t = $('.title');
     if (t) { t.textContent = ''; t.appendChild(document.createTextNode('Ely')); t.appendChild(el('span', 't2', 'Fluff')); }
     var av = $('#avatar');
-    if (av) { var ac = av.getContext('2d'); ac.imageSmoothingEnabled = false; drawFluff(ac, av.width, 4242); }
+    if (av) {
+      var ac = av.getContext('2d');
+      artVariant(0, av.width).then(function (v) { if (v) ac.drawImage(v, 0, 0); else { ac.imageSmoothingEnabled = false; drawFluff(ac, av.width, 4242); } });
+    }
   }
 
   /* ---------- state ---------- */
-  var WL_KEY = 'ef_term_v1';
-  var EMPTY = function () { return { username: '', done: { follow: false, like: false, repost: false, comment: false }, opened: {}, comment: '', wallet: '', applicantId: '', complete: false }; };
+  var WL_KEY = 'ef_term_v2';
+  var EMPTY = function () { return { username: '', done: { follow: false, like: false, repost: false, comment: false }, comment: '', wallet: '', applicantId: '', complete: false, cardSeen: false, game: 0 }; };
   var WL = Object.assign(EMPTY(), store.get(WL_KEY) || {});
   WL.done = Object.assign(EMPTY().done, WL.done || {});
-  WL.opened = WL.opened || {};
   function save() { store.set(WL_KEY, WL); }
   function isUnlocked() { return !!WL.complete; }
   var USER_RE = /^[A-Za-z0-9_]{1,15}$/;
   var WALLET_RE = /^0x[a-fA-F0-9]{40}$/;
-  var REPLY_RE = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})\/status\/(\d{5,25})(?:[/?#].*)?$/i;
   var REF_RE = /^EF-\d{5}$/;
   function postId() { var m = String(C.TASK_POST_URL || '').match(/status\/(\d+)/); return m ? m[1] : ''; }
   function parseUsername(v) {
@@ -95,8 +137,10 @@
   async function api(action, data) {
     var body = Object.assign({ action: action }, data);
     if (DEMO) {
-      await sleep(700);
+      await sleep(350);
       if (action === 'ask') return { ok: false };
+      if (action === 'gstart') return { ok: true, matchId: 'demo' };
+      if (action === 'gend') return { ok: false, demo: true };
       var steps = { follow: 2, engage: 3, comment: 4, wallet: 5 };
       return { ok: true, step: steps[action], applicantId: WL.applicantId || ('EF-' + pad(1 + Math.floor(Math.random() * 999), 5)) };
     }
@@ -139,16 +183,32 @@
     sp.textContent = SPIN[0];
     return function () { clearInterval(t); };
   }
-  function win(title, cls) {
+  function loader(node, label, ms) {
+    return new Promise(function (res) {
+      node.textContent = '';
+      var wrap = el('span', 'loader');
+      wrap.appendChild(el('span', null, label));
+      var bar = el('span', 'lb'), fill = el('i'); bar.appendChild(fill); wrap.appendChild(bar);
+      var pc = el('span', 'lp', '0%'); wrap.appendChild(pc);
+      node.appendChild(wrap);
+      var t0 = performance.now();
+      (function step(now) {
+        var p = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - p, 3);
+        fill.style.width = (e * 100).toFixed(1) + '%'; pc.textContent = Math.round(e * 100) + '%';
+        if (p < 1) requestAnimationFrame(step); else res();
+      })(t0);
+    });
+  }
+  function winEl(title, cls) {
     var w = el('div', 'win' + (cls ? ' ' + cls : ''));
     var b = el('div', 'win-bar');
     var dots = el('span', 'dots'); dots.appendChild(el('i', 'd1')); dots.appendChild(el('i')); dots.appendChild(el('i'));
     b.appendChild(dots); b.appendChild(el('span', 'win-title', title)); b.appendChild(el('span'));
     var body = el('div', 'win-body');
     w.appendChild(b); w.appendChild(body);
-    OUT.appendChild(w); scrollEnd();
-    return body;
+    return { w: w, bar: b, body: body };
   }
+  function win(title, cls) { var x = winEl(title, cls); OUT.appendChild(x.w); scrollEnd(); return x.body; }
   function button(label, cls, fn) { var b = el('button', 'btn' + (cls ? ' ' + cls : ''), label); b.type = 'button'; if (fn) b.addEventListener('click', fn); return b; }
   function ask(ps, placeholder, opts) {
     opts = opts || {};
@@ -171,17 +231,28 @@
       if (window.innerWidth > 760) setTimeout(function () { inp.focus({ preventScroll: true }); }, 60);
     });
   }
+  async function clearScreen() {
+    await typeLine('$ clear', null, 40);
+    await pause(250);
+    $$('#out > *').forEach(function (n) { n.classList.add('clear-fx'); });
+    await sleep(reduced ? 0 : 460);
+    OUT.textContent = ''; PROMPT.textContent = '';
+    SCREEN.scrollTop = 0;
+  }
 
   /* ---------- live values ---------- */
+  var LIVE = { blk: 'syncing...', apps: '--' }, liveStarted = false;
+  function paintLive() {
+    var t = timeLeft();
+    if (t) { var txt = t.live ? 'LIVE' : t.d + 'd ' + pad(t.h, 2) + 'h ' + pad(t.m, 2) + 'm ' + pad(t.s, 2) + 's'; $$('.cdv').forEach(function (e) { e.textContent = txt; }); }
+    $$('.blk').forEach(function (e) { if (e.textContent !== LIVE.blk) { e.textContent = LIVE.blk; e.classList.remove('tick'); void e.offsetWidth; e.classList.add('tick'); } });
+    $$('.apps').forEach(function (e) { if (e.textContent !== LIVE.apps) { e.textContent = LIVE.apps; e.classList.remove('tick'); void e.offsetWidth; e.classList.add('tick'); } });
+  }
   function liveValues() {
-    function cdTick() {
-      var t = timeLeft(); if (!t) return;
-      var txt = t.live ? 'LIVE' : t.d + 'd ' + pad(t.h, 2) + 'h ' + pad(t.m, 2) + 'm ' + pad(t.s, 2) + 's';
-      $$('.cdv').forEach(function (e) { e.textContent = txt; });
-    }
-    cdTick(); setInterval(cdTick, 1000);
-
-    var url = C.HYPEREVM_TESTNET_RPC, last = 0, fails = 0, timer;
+    if (liveStarted) { paintLive(); return; }
+    liveStarted = true;
+    paintLive(); setInterval(paintLive, 1000);
+    var url = C.HYPEREVM_TESTNET_RPC, fails = 0, timer, got = false;
     async function blk() {
       try {
         var ctrl = new AbortController(), to = setTimeout(function () { ctrl.abort(); }, 6000);
@@ -189,27 +260,21 @@
         clearTimeout(to);
         var n = parseInt((await r.json()).result, 16);
         if (!isFinite(n)) throw 0;
-        fails = 0;
-        if (n !== last) { last = n; $$('.blk').forEach(function (e) { e.textContent = '#' + fmt(n); e.classList.remove('tick'); void e.offsetWidth; e.classList.add('tick'); }); }
+        fails = 0; got = true; LIVE.blk = '#' + fmt(n);
       } catch (e) {
-        if (++fails > 2) { clearInterval(timer); if (!last) $$('.blk').forEach(function (e) { e.textContent = 'online'; }); }
+        if (++fails > 2) { clearInterval(timer); if (!got) LIVE.blk = 'online'; }
       }
     }
-    if (url) { blk(); timer = setInterval(function () { if (!document.hidden) blk(); }, 4000); }
-    else $$('.blk').forEach(function (e) { e.textContent = 'online'; });
-
+    if (url) { blk(); timer = setInterval(function () { if (!document.hidden) blk(); }, 4000); } else LIVE.blk = 'online';
     async function stats() {
       var j = await apiGet('action=stats');
       if (!j || !j.ok) return;
       var n = Number(j.count) || 0;
-      $$('.apps').forEach(function (e) {
-        var v = n > 0 ? fmt(n) + ' whitelisted' : 'be the first';
-        if (e.textContent !== v) { e.textContent = v; e.classList.remove('tick'); void e.offsetWidth; e.classList.add('tick'); }
-      });
+      LIVE.apps = n > 0 ? fmt(n) + ' whitelisted' : 'be the first';
       renderFeed(j);
     }
     if (!DEMO) { stats(); setInterval(function () { if (!document.hidden) stats(); }, 20000); }
-    else $$('.apps').forEach(function (e) { e.textContent = 'demo mode'; });
+    else LIVE.apps = 'demo mode';
   }
 
   /* ---------- boot ---------- */
@@ -218,23 +283,21 @@
     await pause(250);
     line('[boot] loading whitelist protocol... done', 'dim'); await pause(150);
     line('[boot] network: hyperevm testnet → elysium mainnet', 'dim'); await pause(150);
-    line([['dim', '[boot] hyperevm testnet block: '], ['live-v blk', 'syncing...']]); await pause(150);
+    line([['dim', '[boot] hyperevm testnet block: '], ['live-v blk', LIVE.blk]]); await pause(150);
     line([['dim', '[boot] elysium mainnet in: '], ['live-v cdv', '--']]); await pause(150);
-    line([['dim', '[boot] applicants: '], ['live-v apps', '--']]); await pause(150);
+    line([['dim', '[boot] applicants: '], ['live-v apps', LIVE.apps]]); await pause(150);
     line([['dim', '[boot] status: '], ['hl', TICKER + ' WHITELIST OPEN']]);
     gap();
     await typeLine('$ ./scan --collection elyfluff --live', null, 18);
     scanWindow();
     gap();
-    if (!WL.complete) {
-      line([['dim', '[vault] project files are encrypted. complete the tasks to decrypt.']]);
-      var v = el('div', 'vault-locked');
-      [['about.txt'], ['tokenomics.cfg'], ['launchpad.sh'], ['treasure_map.png'], ['live_feed.log']].forEach(function (f) {
-        var r = el('div', 'f'); r.appendChild(el('span', null, f[0])); r.appendChild(el('span', null, '[locked]')); v.appendChild(r);
-      });
-      OUT.appendChild(v);
-      gap();
-    }
+    line([['dim', '[vault] project files are encrypted. complete the tasks to decrypt.']]);
+    var v = el('div', 'vault-locked');
+    ['fluff_arena (game)', 'about.txt', 'tokenomics.cfg', 'launchpad.sh', 'treasure_map.png', 'live_feed.log'].forEach(function (f) {
+      var r = el('div', 'f'); r.appendChild(el('span', null, f)); r.appendChild(el('span', null, '[locked]')); v.appendChild(r);
+    });
+    OUT.appendChild(v);
+    gap();
   }
   function scanWindow() {
     var body = win('elyfluff@scan: ~/collection/live', 'teal');
@@ -275,19 +338,22 @@
     if (!WL.complete && !DEMO) {
       var c = await apiGet('action=check&u=' + encodeURIComponent(WL.username));
       if (c && c.ok && (c.status === 'PENDING' || c.status === 'GTD' || c.status === 'FCFS')) {
-        WL.complete = true; WL.done = { follow: true, like: true, repost: true, comment: true };
+        WL.complete = true; WL.cardSeen = true; WL.done = { follow: true, like: true, repost: true, comment: true };
         if (c.id) WL.applicantId = c.id;
         if (c.wallet) WL.wallet = c.wallet;
+        if (c.game != null) WL.game = Number(c.game) || 0;
         save();
-        FAST = true;
       }
     }
     var w = line([['ok', '✓ welcome' + (WL.complete ? ' back' : '') + ', @' + WL.username + '  ']]);
+    w.appendChild(resetBtn());
+    gap();
+  }
+  function resetBtn() {
     var reset = el('button', 'btn btn-sm btn-ghost', 'not you? reset');
     reset.type = 'button';
     reset.addEventListener('click', function () { store.del(WL_KEY); location.reload(); });
-    w.appendChild(reset);
-    gap();
+    return reset;
   }
 
   /* ---------- tasks ---------- */
@@ -299,16 +365,16 @@
         { k: 'follow', h: 'Follow @' + h, d: 'follow the official account', ok: 'follow complete', url: 'https://x.com/intent/follow?screen_name=' + encodeURIComponent(h) },
         { k: 'like', h: 'Like the post', d: 'like the ' + TICKER + ' post', ok: 'like complete', url: 'https://x.com/intent/like?tweet_id=' + pid },
         { k: 'repost', h: 'Repost the post', d: 'repost the ' + TICKER + ' post', ok: 'repost complete', url: 'https://x.com/intent/retweet?tweet_id=' + pid },
-        { k: 'comment', h: 'Comment on the post', d: 'reply with anything, then paste your reply link here', ok: 'comment complete', url: 'https://x.com/intent/tweet?in_reply_to=' + pid }
+        { k: 'comment', h: 'Comment on the post', d: 'write anything — your words', ok: 'comment complete' }
       ];
       var wrap = el('div', 'tasks'); OUT.appendChild(wrap);
-      var busyK = {}, errK = {}, boxes = {}, finished = false;
+      var busyK = {}, errK = {}, finished = false;
       defs.forEach(function (d, i) {
         var b = el('div', 'task'); b.setAttribute('role', 'button'); b.tabIndex = 0;
         var hh = el('div', 't-h'); hh.appendChild(el('em', null, '[0' + (i + 1) + '/04] ')); hh.appendChild(document.createTextNode(d.h));
         b.appendChild(hh); b.appendChild(el('div', 't-d', d.d));
         var st = el('span', 't-s'); b.appendChild(st);
-        d.st = st; d.box = b; d.i = i; boxes[d.k] = d;
+        d.st = st; d.box = b; d.i = i;
         b.addEventListener('click', function (e) { if (e.target.closest('.task-extra')) return; tap(d); });
         b.addEventListener('keydown', function (e) { if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('.task-extra')) { e.preventDefault(); tap(d); } });
         wrap.appendChild(b);
@@ -318,19 +384,18 @@
         if (WL.done[d.k]) return 'done';
         if (!prevDone(d)) return 'locked';
         if (busyK[d.k]) return 'busy';
-        if (WL.opened[d.k]) return 'wait';
         return 'idle';
       }
       function refresh() {
         defs.forEach(function (d) {
           var s = state(d), b = d.box;
-          b.classList.toggle('done', s === 'done'); b.classList.toggle('locked', s === 'locked'); b.classList.toggle('wait', s === 'wait' || s === 'busy');
+          b.classList.toggle('done', s === 'done'); b.classList.toggle('locked', s === 'locked'); b.classList.toggle('wait', s === 'busy' || (s === 'idle' && !!errK[d.k]));
           if (s !== 'busy') {
-            d.st.className = 't-s';
+            d.st.className = 't-s'; d.st.textContent = '';
             if (s === 'done') d.st.textContent = '✓ ' + d.ok;
             else if (s === 'locked') d.st.textContent = '[locked] finish task 0' + d.i + ' first';
-            else if (s === 'wait') d.st.textContent = errK[d.k] ? '✗ ' + errK[d.k] + ' · tap to try again' : (d.k === 'comment' ? '→ paste your reply link below' : '… finish on X, then come back here');
-            else { d.st.textContent = ''; d.st.appendChild(el('span', 'go', '→ tap to open X')); }
+            else if (errK[d.k]) d.st.textContent = '✗ ' + errK[d.k] + ' · tap to try again';
+            else if (d.k !== 'comment') d.st.appendChild(el('span', 'go', '→ tap to open X'));
           }
           if (d.k === 'comment') commentExtra(d, s);
           b.setAttribute('aria-disabled', s === 'locked' || s === 'done' ? 'true' : 'false');
@@ -343,78 +408,66 @@
       }
       function tap(d) {
         var s = state(d);
-        if (s === 'locked' || s === 'done' || s === 'busy') return;
-        if (s === 'wait' && errK[d.k] && d.k !== 'comment') { verify(d); return; }
+        if (s !== 'idle') return;
+        if (d.k === 'comment') { var inp = d.box.querySelector('textarea, input'); if (inp) inp.focus(); return; }
         openUrl(d.url);
-        WL.opened[d.k] = Date.now(); errK[d.k] = ''; save();
-        refresh();
+        run(d);
       }
-      async function verify(d, extra) {
+      async function callApi(d, extra) {
+        if (d.k === 'like') return { ok: true };
+        if (d.k === 'follow') return api('follow', { username: WL.username, ref: store.get('ef_ref') || '' });
+        var action = d.k === 'repost' ? 'engage' : 'comment', resp;
+        for (var tries = 0; tries < 4; tries++) {
+          resp = await api(action, action === 'comment' ? { username: WL.username, comment: extra } : { username: WL.username });
+          if (resp && resp.ok) break;
+          if (!(resp && /too fast/i.test(resp.error || ''))) break;
+          await sleep(1200);
+        }
+        return resp;
+      }
+      async function run(d, extra) {
         busyK[d.k] = true; errK[d.k] = ''; refresh();
-        var stop = spinner(d.st, 'verifying ' + d.k + '...');
-        var resp = { ok: true };
-        await sleep(FAST ? 0 : 900);
-        if (d.k === 'follow') {
-          resp = await api('follow', { username: WL.username, ref: store.get('ef_ref') || '' });
-          if (resp && resp.ok) {
+        var both = await Promise.all([loader(d.st, 'verifying ' + d.k, reduced ? 10 : 1000), callApi(d, extra)]);
+        var resp = both[1];
+        busyK[d.k] = false;
+        if (resp && resp.ok) {
+          WL.done[d.k] = true;
+          if (d.k === 'follow') {
             if (resp.applicantId) WL.applicantId = resp.applicantId;
             if (resp.step > 2) { WL.done.like = true; WL.done.repost = true; }
             if (resp.step > 3) WL.done.comment = true;
             if (resp.step >= 5) { WL.complete = true; if (resp.wallet) WL.wallet = resp.wallet; }
           }
-        } else if (d.k === 'repost') {
-          for (var tries = 0; tries < 3; tries++) {
-            resp = await api('engage', { username: WL.username });
-            if (resp && resp.ok) break;
-            if (!(resp && /too fast/i.test(resp.error || ''))) break;
-            await sleep(3000);
-          }
-        } else if (d.k === 'comment') {
-          resp = await api('comment', { username: WL.username, commentUrl: extra });
-          if (resp && resp.ok) WL.comment = extra;
+          if (d.k === 'comment') WL.comment = extra;
+          save();
+        } else {
+          errK[d.k] = (resp && resp.error ? String(resp.error).toLowerCase().replace(/\.$/, '') : 'could not verify');
         }
-        stop();
-        busyK[d.k] = false;
-        if (resp && resp.ok) { WL.done[d.k] = true; save(); }
-        else { errK[d.k] = (resp && resp.error ? String(resp.error).toLowerCase().replace(/\.$/, '') : 'could not verify'); }
         refresh();
       }
       function commentExtra(d, s) {
         var ex = d.box.querySelector('.task-extra');
-        if (s !== 'wait') { if (ex) ex.remove(); return; }
+        if (s !== 'idle') { if (ex && s !== 'busy') ex.remove(); return; }
         if (ex) return;
         ex = el('div', 'task-extra');
-        ex.appendChild(el('div', 'dim', 'on X: tap share on your reply → copy link → paste here'));
         var row = el('div', 'inrow');
         var box = el('label', 'inbox'), inp = el('input');
-        inp.type = 'url'; inp.placeholder = 'https://x.com/you/status/...'; inp.autocomplete = 'off'; inp.setAttribute('autocapitalize', 'off'); inp.spellcheck = false; inp.maxLength = 200;
-        inp.setAttribute('aria-label', 'Your reply link');
+        inp.type = 'text'; inp.placeholder = 'type your comment...'; inp.autocomplete = 'off'; inp.maxLength = 200;
+        inp.setAttribute('aria-label', 'Your comment');
         box.appendChild(inp); row.appendChild(box);
-        row.appendChild(button('paste', 'btn-sm btn-ghost', async function () { try { var t = await navigator.clipboard.readText(); if (t) inp.value = t.trim(); } catch (e) { inp.focus(); } }));
-        row.appendChild(button('verify ↵', 'btn-sm', submit));
-        row.appendChild(button('open X ↗', 'btn-sm btn-ghost', function () { openUrl(d.url); WL.opened.comment = Date.now(); save(); }));
+        row.appendChild(button('post comment ↗', 'btn-sm', submit));
         inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
         ex.appendChild(row);
         d.box.appendChild(ex);
         function submit() {
-          var m = String(inp.value || '').trim().match(REPLY_RE);
-          if (!m) { errK.comment = 'paste the link of your reply'; refresh(); return; }
-          if (m[1].toLowerCase() !== WL.username.toLowerCase()) { errK.comment = 'this reply is not from @' + WL.username; refresh(); return; }
-          if (m[2] === postId()) { errK.comment = 'that is our post, paste your own reply'; refresh(); return; }
-          var left = Math.ceil(MIN_SEC - (Date.now() - (WL.opened.comment || 0)) / 1000);
-          if (left > 0) { errK.comment = 'finish on X first, try again in ' + left + 's'; refresh(); return; }
-          verify(d, 'https://x.com/' + m[1] + '/status/' + m[2]);
+          var v = String(inp.value || '').replace(/\s+/g, ' ').trim();
+          if (v.length < 2) { errK.comment = 'write at least 2 characters'; refresh(); inp.focus(); return; }
+          errK.comment = '';
+          openUrl('https://x.com/intent/tweet?in_reply_to=' + pid + '&text=' + encodeURIComponent(v));
+          ex.remove();
+          run(d, v.slice(0, 200));
         }
       }
-      function autoCheck() {
-        if (finished) return;
-        defs.forEach(function (d) {
-          if (d.k === 'comment' || state(d) !== 'wait' || errK[d.k]) return;
-          if (Date.now() - (WL.opened[d.k] || 0) >= MIN_SEC * 1000) verify(d);
-        });
-      }
-      var iv = setInterval(function () { if (finished) { clearInterval(iv); return; } if (!document.hidden) autoCheck(); }, 1200);
-      document.addEventListener('visibilitychange', function () { if (!document.hidden) setTimeout(autoCheck, 400); });
       refresh();
     });
   }
@@ -445,27 +498,33 @@
   }
 
   /* ---------- permit ---------- */
-  async function permitStage() {
-    await typeLine('$ ./print_permit --holder @' + WL.username, null, 18);
-    var body = win('elyfluff@permit: ~/permits/' + (WL.applicantId || 'EF-00000') + '.txt', 'red permit');
-    var cv = el('canvas'); cv.width = 1200; cv.height = 720; cv.setAttribute('aria-label', 'Your ElyFluff whitelist permit');
-    body.appendChild(cv);
-    await drawPermit(cv);
-    var row = el('div', 'btn-row');
-    row.appendChild(button('download ↓', '', function () { downloadCanvas(cv); }));
-    row.appendChild(button('share on X ↗', 'btn-ghost', function () {
-      var text = 'I just got my ' + (C.PROJECT_NAME || 'ElyFluff') + ' whitelist permit.\n\n' + fmt(SUPPLY) + ' NFTs + ' + TICKER + '. Testnet on HyperEVM, mainnet on Elysium.\n\nJoin with my invite: ' + refLink() + '\n\n@' + handle();
-      openUrl('https://x.com/intent/tweet?text=' + encodeURIComponent(text));
-    }));
-    var cp = button('copy invite link', 'btn-ghost', async function () {
-      try { await navigator.clipboard.writeText(refLink()); cp.textContent = 'copied ✓'; } catch (e) { cp.textContent = 'copy failed'; }
-      setTimeout(function () { cp.textContent = 'copy invite link'; }, 1800);
+  function shareText() {
+    return 'I just got my ' + (C.PROJECT_NAME || 'ElyFluff') + ' whitelist permit.\n\n' + fmt(SUPPLY) + ' NFTs + ' + TICKER + '. Testnet on HyperEVM, mainnet on Elysium.\n\nJoin with my invite: ' + refLink() + '\n\n@' + handle();
+  }
+  function shareX() { openUrl('https://x.com/intent/tweet?text=' + encodeURIComponent(shareText())); }
+  function permitStage() {
+    return new Promise(async function (resolve) {
+      await typeLine('$ ./print_permit --holder @' + WL.username, null, 18);
+      var body = win('elyfluff@permit: ~/permits/' + (WL.applicantId || 'EF-00000') + '.txt', 'red permit');
+      var cv = el('canvas'); cv.width = 1200; cv.height = 720; cv.setAttribute('aria-label', 'Your ElyFluff whitelist permit');
+      body.appendChild(cv);
+      await drawPermit(cv);
+      line('? download your permit, then share it on X to open the vault.');
+      var row = el('div', 'btn-row');
+      var done = false, dl = false;
+      function finish() { if (done) return; done = true; WL.cardSeen = true; save(); setTimeout(resolve, 1200); }
+      var dlb = button('download ↓', '', function () { downloadCanvas(cv); dl = true; dlb.textContent = 'downloaded ✓'; shb.classList.remove('btn-ghost'); });
+      var shb = button('share on X ↗', 'btn-ghost', function () {
+        shareX(); shb.textContent = 'shared ✓';
+        line([['ok', '✓ permit shared. '], ['dim', 'opening the vault...']]);
+        finish();
+      });
+      var skip = button('skip →', 'btn-sm btn-ghost', function () { line('opening the vault...', 'dim'); finish(); });
+      row.appendChild(dlb); row.appendChild(shb); row.appendChild(skip);
+      OUT.appendChild(row);
+      line([['dim', 'your invite link: '], ['sky', refLink()]]);
+      scrollEnd();
     });
-    row.appendChild(cp);
-    OUT.appendChild(row);
-    line([['dim', 'your invite link: '], ['sky', refLink()]]);
-    line('keep notifications on for @' + handle() + ', updates will be announced there.', 'dim');
-    gap();
   }
   function downloadCanvas(cv) {
     cv.toBlob(function (b) {
@@ -475,6 +534,31 @@
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(function () { URL.revokeObjectURL(u); }, 5000);
     }, 'image/png');
+  }
+  function openCardModal() {
+    var m = el('div', 'modal');
+    var x = winEl('elyfluff@permit: ~/permits/' + (WL.applicantId || 'EF-00000') + '.txt', 'red permit');
+    var close = el('button', 'ag-x', 'close ×'); close.type = 'button';
+    x.bar.replaceChild(close, x.bar.lastChild);
+    var cv = el('canvas'); cv.width = 1200; cv.height = 720; cv.setAttribute('aria-label', 'Your ElyFluff whitelist permit');
+    x.body.appendChild(cv);
+    var row = el('div', 'btn-row');
+    row.appendChild(button('download ↓', '', function () { downloadCanvas(cv); }));
+    row.appendChild(button('share on X ↗', 'btn-ghost', shareX));
+    var cp = button('copy invite link', 'btn-ghost', async function () {
+      try { await navigator.clipboard.writeText(refLink()); cp.textContent = 'copied ✓'; } catch (e) { cp.textContent = 'copy failed'; }
+      setTimeout(function () { cp.textContent = 'copy invite link'; }, 1800);
+    });
+    row.appendChild(cp);
+    x.body.appendChild(row);
+    m.appendChild(x.w);
+    function shut() { m.remove(); document.removeEventListener('keydown', esc); }
+    function esc(e) { if (e.key === 'Escape') shut(); }
+    close.addEventListener('click', shut);
+    m.addEventListener('click', function (e) { if (e.target === m) shut(); });
+    document.addEventListener('keydown', esc);
+    document.body.appendChild(m);
+    drawPermit(cv);
   }
   async function drawPermit(cv) {
     if (document.fonts && document.fonts.load) {
@@ -503,20 +587,19 @@
     }
     function fit(s, maxW, size, fam) { var f; do { f = size + 'px ' + fam; x.font = f; size -= 2; } while (x.measureText(s).width > maxW && size > 22); return f; }
     x.textBaseline = 'alphabetic';
-
     var ix = 58, iy = 64, is = 340;
     x.fillStyle = CR; x.fillRect(ix + 14, iy + 14, is + 12, is + 12);
     x.fillStyle = INK; x.fillRect(ix - 6, iy - 6, is + 12, is + 12);
-    var sp = document.createElement('canvas'); sp.width = sp.height = is;
-    var spx = sp.getContext('2d', { willReadFrequently: true });
     var imgs = (C.NFT_IMAGES || []).filter(function (i) { return i && i.src; });
     var specId = 1 + (seed % SUPPLY), drawn = false;
-    if (imgs.length) { var item = imgs[seed % imgs.length], im = await loadImg(item.src); if (im) { coverDraw(spx, im, is); drawn = true; specId = item.id || specId; } }
-    if (!drawn) drawFluff(spx, is, seed);
-    x.drawImage(sp, ix, iy);
+    if (imgs.length) {
+      var item = imgs[seed % imgs.length], im = await loadImg(item.src);
+      if (im) { var sp0 = document.createElement('canvas'); sp0.width = sp0.height = is; coverDraw(sp0.getContext('2d'), im, is); x.drawImage(sp0, ix, iy); drawn = true; specId = item.id || specId; }
+    }
+    if (!drawn) { var av = await artVariant(seed % ART_BGS.length, is); if (av) { x.drawImage(av, ix, iy); drawn = true; } }
+    if (!drawn) { var sp = document.createElement('canvas'); sp.width = sp.height = is; drawFluff(sp.getContext('2d', { willReadFrequently: true }), is, seed); x.drawImage(sp, ix, iy); }
     T('holder_photo: [ELYFLUFF #' + pad(specId) + ']', ix, iy + is + 44, '500 17px "IBM Plex Mono", monospace', '#5F6E6A', 0.5);
     T('> x.com/' + handle(), ix, iy + is + 70, '500 17px "IBM Plex Mono", monospace', '#5F6E6A', 0.5);
-
     var rx = 470;
     T('$ whoami', rx, 92, '500 18px "IBM Plex Mono", monospace', '#5F6E6A', 0);
     var who = '@' + user.toUpperCase();
@@ -529,7 +612,6 @@
     x.fillStyle = CR; x.fillText('WHITELISTED', rx + 7, 305);
     x.fillStyle = PAPER; x.fillText('WHITELISTED', rx, 298);
     x.strokeStyle = INK; x.lineWidth = 4; x.strokeText('WHITELISTED', rx, 298);
-
     var rows = [['wallet', shortWallet(WL.wallet) || '0x...'], ['permit_id', WL.applicantId || 'EF-00000'], ['issued', new Date().toLocaleDateString('en-GB').replace(/\//g, '.')], ['network', 'hyperevm → elysium']];
     rows.forEach(function (r, i) {
       var yy = 372 + i * 42;
@@ -541,13 +623,104 @@
     var rr = mulberry32(seed), bx = 920;
     while (bx < 1140) { var bw = 2 + Math.floor(rr() * 5); x.fillStyle = INK; x.fillRect(bx, 356, bw, 112); bx += bw + 2 + Math.floor(rr() * 4); }
     T(WL.applicantId || 'EF-00000', 920, 494, '500 15px "IBM Plex Mono", monospace', '#5F6E6A', 1);
-
     x.fillStyle = INK; x.fillRect(rx, 560, 330, 50);
     T('STATUS: WHITELISTED', rx + 18, 593, '700 21px "IBM Plex Mono", monospace', PAPER, 1);
     x.fillStyle = CR; x.fillRect(rx + 344, 562, 14, 46);
     x.fillStyle = TI; x.fillRect(920, 560, 220, 50);
     T(TICKER + ' · ELYSIUM', 1030, 593, '700 18px "IBM Plex Mono", monospace', '#FFFFFF', 1, 'center');
     T('tier: pending selection (gtd / fcfs)', rx, 650, '500 17px "IBM Plex Mono", monospace', '#5F6E6A', 0);
+  }
+
+  /* ---------- member page ---------- */
+  async function memberStage() {
+    liveValues();
+    await typeLine('$ login --user @' + WL.username, null, 22);
+    var w = line([['ok', '✓ welcome, @' + WL.username], ['dim', '  · permit ' + (WL.applicantId || 'EF-00000') + ' · '], ['hl', 'WHITELISTED']]);
+    var mt = el('div', 'btn-row');
+    mt.appendChild(button('view my card', 'btn-sm', openCardModal));
+    mt.appendChild(button('share on X ↗', 'btn-sm btn-ghost', shareX));
+    mt.appendChild(resetBtn());
+    OUT.appendChild(mt);
+    line([['dim', '[live] hyperevm block '], ['live-v blk', LIVE.blk], ['dim', ' · elysium in '], ['live-v cdv', '--'], ['dim', ' · '], ['live-v apps', LIVE.apps]]);
+    paintLive();
+    gap();
+    await typeLine('$ ./fluff_arena --play', null, 20);
+    lobbyWindow();
+    gap();
+    await vaultStage();
+  }
+
+  /* ---------- arena lobby ---------- */
+  function lobbyWindow() {
+    var body = win('elyfluff@arena: ~/fluff_arena', 'red wide');
+    var gcfg = (window.FluffArena && window.FluffArena.config) || { round: 900, redAt: 600, blueAt: 600, bots: 7 };
+    function mm(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+    var L = el('div', 'lobby');
+    var hero = el('div', 'lobby-hero');
+    var hc = el('canvas'); hc.width = 640; hc.height = 400; hero.appendChild(hc);
+    hero.appendChild(el('div', 'lh-t', 'FLUFF ARENA'));
+    hero.appendChild(el('div', 'lh-s', '2D jetpack battle · defeat enemies · collect ' + TICKER));
+    drawLobbyHero(hc);
+    var right = el('div');
+    var rules = el('div', 'rules');
+    [['round', mm(gcfg.round) + ' · you vs ' + gcfg.bots + ' fighters'],
+     ['loot', 'defeated enemies drop ' + TICKER],
+     [mm(gcfg.redAt), 'RED ZONE strikes · get out fast'],
+     [mm(gcfg.blueAt), 'BLUE ZONE opens · ' + TICKER + ' rains down'],
+     ['save', 'your ' + TICKER + ' is saved after each round']].forEach(function (r) {
+      var d = el('div', 'ln'); d.appendChild(el('span', 'k', r[0])); d.appendChild(document.createTextNode(' ' + r[1])); rules.appendChild(d);
+    });
+    right.appendChild(rules);
+    var mine = el('div', 'mine');
+    mine.appendChild(el('span', 'dim', 'your arena ' + TICKER));
+    var mv = el('b', null, fmt(WL.game || 0)); mv.id = 'myGame';
+    mine.appendChild(mv);
+    right.appendChild(mine);
+    var play = button('▶ play now', 'btn-play', launchGame);
+    right.appendChild(play);
+    right.appendChild(el('div', 'ln dim', 'best in landscape on tablet or computer'));
+    L.appendChild(hero); L.appendChild(right);
+    body.appendChild(L);
+    var bh = el('div', 'ln board-h', '# top fighters'); body.appendChild(bh);
+    var lb = el('div', 'feed'); lb.id = 'lobbyBoard'; body.appendChild(lb);
+    renderFeed(null);
+  }
+  async function drawLobbyHero(c) {
+    var x = c.getContext('2d'), W = c.width, H = c.height;
+    var gr = x.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#041A17'); gr.addColorStop(1, '#0E5246');
+    x.fillStyle = gr; x.fillRect(0, 0, W, H);
+    x.save(); x.translate(W * 0.68, H * 0.45); x.fillStyle = 'rgba(151,252,228,0.08)';
+    for (var i = 0; i < 24; i++) { x.rotate(Math.PI / 12); x.beginPath(); x.moveTo(0, 0); x.lineTo(900, -40); x.lineTo(900, 40); x.closePath(); x.fill(); }
+    x.restore();
+    x.fillStyle = '#171717'; x.fillRect(0, H - 40, W, 40); x.fillStyle = '#5EE6CF'; x.fillRect(0, H - 40, W, 4); x.fillStyle = '#A31C1B'; x.fillRect(0, H - 36, W, 3);
+    x.fillStyle = '#171717'; x.fillRect(40, 250, 200, 16); x.fillStyle = '#5EE6CF'; x.fillRect(40, 250, 200, 3);
+    x.fillStyle = 'rgba(224,69,63,0.25)'; x.fillRect(0, 0, 120, H - 40);
+    var v = await artVariant(0, 300);
+    if (v) {
+      x.save(); x.beginPath(); x.arc(W * 0.68, H * 0.47, 128, 0, Math.PI * 2); x.closePath();
+      x.fillStyle = '#171717'; x.fill(); x.clip(); x.drawImage(v, W * 0.68 - 150, H * 0.47 - 150, 300, 300); x.restore();
+      x.lineWidth = 6; x.strokeStyle = '#171717'; x.beginPath(); x.arc(W * 0.68, H * 0.47, 128, 0, Math.PI * 2); x.stroke();
+      x.lineWidth = 3; x.strokeStyle = '#5EE6CF'; x.beginPath(); x.arc(W * 0.68, H * 0.47, 138, 0, Math.PI * 2); x.stroke();
+    }
+    for (var k = 0; k < 7; k++) { var cx = 60 + k * 26, cy = 236 - (k % 2) * 10; x.fillStyle = '#5EE6CF'; x.strokeStyle = '#171717'; x.lineWidth = 2.5; x.beginPath(); x.ellipse(cx, cy, 9, 10, 0, 0, Math.PI * 2); x.fill(); x.stroke(); x.fillStyle = '#171717'; x.font = '700 11px "IBM Plex Mono", monospace'; x.textAlign = 'center'; x.fillText('F', cx, cy + 4); }
+  }
+  function launchGame() {
+    if (!window.FluffArena) { line('✗ game files are missing. upload game.js.', 'err'); return; }
+    window.FluffArena.open({
+      username: WL.username,
+      onStart: async function () {
+        if (DEMO) return { ok: true, matchId: 'demo' };
+        var r = await api('gstart', { username: WL.username });
+        return r && r.ok ? r : { ok: false, error: (r && r.error) || 'could not start' };
+      },
+      onEnd: async function (res) {
+        if (DEMO || res.matchId === 'demo') return { ok: false, demo: true };
+        var r = await api('gend', { username: WL.username, matchId: res.matchId, tokens: res.tokens, kills: res.kills, deaths: res.deaths, secs: res.secs });
+        if (r && r.ok) { WL.game = Number(r.total) || WL.game; save(); var mg = $('#myGame'); if (mg) mg.textContent = fmt(WL.game); }
+        return r;
+      },
+      onClose: function () { var mg = $('#myGame'); if (mg) mg.textContent = fmt(WL.game || 0); }
+    });
   }
 
   /* ---------- vault ---------- */
@@ -648,6 +821,16 @@
   var lastStats = null;
   function renderFeed(j) {
     if (j) lastStats = j;
+    var games = (lastStats && Array.isArray(lastStats.topGame)) ? lastStats.topGame : [];
+    var lb = $('#lobbyBoard');
+    if (lb) {
+      lb.textContent = '';
+      if (!games.length) lb.appendChild(el('div', 'ln dim', DEMO ? '[demo] scores appear here once the sheet is connected.' : 'no scores yet. be the first fighter.'));
+      games.slice(0, 7).forEach(function (r, i) {
+        var d = el('div', 'ln'); d.appendChild(el('span', i === 0 ? 'hl' : 'dim', String(i + 1).padStart(2, '0'))); d.appendChild(document.createTextNode('  @' + r.u + '  ')); d.appendChild(el('span', 'ok', fmt(r.n) + ' ' + TICKER));
+        lb.appendChild(d);
+      });
+    }
     var fd = $('#feed');
     if (!fd) return;
     fd.textContent = '';
@@ -822,8 +1005,13 @@
           }
         }
       }
-      octx.imageSmoothingEnabled = false;
       var id = 1 + Math.floor(Math.random() * SUPPLY);
+      var vi = Math.floor(Math.random() * ART_BGS.length), av = await artVariant(vi, S);
+      if (av) {
+        octx.clearRect(0, 0, S, S); octx.drawImage(av, 0, 0);
+        return { id: id, traits: { Character: 'ElyFluff', Hat: 'Bunny', Jacket: 'Retro wave', Background: ART_BGS[vi][0], Status: 'Preview' } };
+      }
+      octx.imageSmoothingEnabled = false;
       return { id: id, traits: drawFluff(octx, S, id * 7919 + 13) };
     }
     function readout(d) {
@@ -840,6 +1028,7 @@
       scramble($('#roSig'), 'sig 0x' + hex + ' · elyfluff', 150);
     }
     async function next() {
+      if (!cv.isConnected) { phase = 'stop'; return; }
       phase = 'wait';
       cur = await prepare();
       lctx.imageSmoothingEnabled = true;
@@ -872,6 +1061,7 @@
       ctx.fillRect(0, y, S, h);
     }
     function frame(now) {
+      if (phase === 'stop' || !cv.isConnected) return;
       requestAnimationFrame(frame);
       if (!cur || document.hidden || phase === 'wait') return;
       var e = now - t0;
@@ -887,12 +1077,14 @@
       }
     }
     if (reduced) {
+      var iv2;
       var show = async function () {
+        if (!cv.isConnected) { clearInterval(iv2); return; }
         cur = await prepare(); ctx.drawImage(off, 0, 0); readout(cur);
         fill.style.width = '100%'; tag.textContent = 'DECODED'; tag.classList.add('decoded');
         count++; $('#roCount').textContent = count;
       };
-      show(); setInterval(show, 4500);
+      show(); iv2 = setInterval(show, 4500);
       return;
     }
     next();
@@ -1135,6 +1327,10 @@
     var t = timeLeft();
     var cdTxt = !t ? 'on Nov 9' : (t.live ? 'now live' : 'in ' + t.d + ' days and ' + t.h + ' hours (Nov 9)');
     return [
+      { k: ['game', 'arena', 'play', 'fight', 'shooter', 'militia', 'battle'], a: 'Fluff Arena is our 2D jetpack battle game. It unlocks after you finish the whitelist tasks.\n\nA round lasts ' + Math.round(((window.FluffArena && window.FluffArena.config.round) || 900) / 60) + ' minutes. Defeat enemies and they drop ' + TICKER + '. Collect it, and it is saved to your account when the round ends.' },
+      { k: ['red', 'zone', 'redzone', 'danger'], a: 'In Fluff Arena, a RED ZONE strikes the map at the 10:00 mark. Anyone inside takes heavy damage, so get out fast when the warning appears.' },
+      { k: ['blue', 'bluezone', 'drop', 'drops', 'rain'], a: 'In the last 5 minutes of a Fluff Arena round, a BLUE ZONE opens and ' + TICKER + ' rains down inside it. Expect a big fight there.' },
+      { k: ['controls', 'jetpack', 'shoot', 'aim', 'move'], a: 'Touch: left stick moves, push it up to use the jetpack. Right stick aims, push it far to shoot.\nKeyboard: A/D move, W or space jetpack, mouse to aim, click to shoot, R to reload.' },
       { k: ['hi', 'hello', 'hey', 'gm', 'yo', 'sup'], a: 'Hey! I am the ElyFluff assistant. Ask me about the whitelist, GTD and FCFS, the testnet mint, tokenomics or the roadmap.' },
       { k: ['what', 'about', 'elyfluff', 'project', 'explain', 'is'], a: 'ElyFluff is a ' + fmt(SUPPLY) + '-piece NFT collection paired with the ' + TICKER + ' token, built for the Elysium mainnet.\n\nIt launches first on HyperEVM Testnet. Wallets that hold the testnet NFT or testnet ' + TICKER + ' qualify for Elysium mainnet.' },
       { k: ['whitelist', 'wl', 'join', 'apply', 'how', 'task', 'tasks', 'qualify', 'eligible'], a: 'To join the whitelist, complete 4 tasks in the Whitelist section:\n\n1. Follow ' + hx + ' on X\n2. Like and repost our post\n3. Comment on the post and paste your reply link\n4. Register your EVM wallet\n\nThen you get your ElyFluff card and an invite link.' },
@@ -1209,7 +1405,7 @@
       await typeOut(answer);
       busyAg = false;
     }
-    var CH = ['What is ElyFluff?', 'How do I join?', 'GTD vs FCFS', 'Mint price', 'Tokenomics', 'When is mainnet?', 'Roadmap', 'Is it safe?'];
+    var CH = ['What is ElyFluff?', 'How do I join?', 'How does the game work?', 'Red zone', 'GTD vs FCFS', 'Mint price', 'Tokenomics', 'When is mainnet?', 'Roadmap', 'Is it safe?'];
     CH.forEach(function (c) {
       var b = el('button', 'chip', c); b.type = 'button';
       b.addEventListener('click', function () { ask(c); });
@@ -1230,16 +1426,19 @@
   /* ---------- start ---------- */
   async function run() {
     OUT = $('#out'); SCREEN = $('#screen'); PROMPT = $('#prompt');
+    if (WL.complete && WL.cardSeen) { FAST = true; await memberStage(); FAST = false; return; }
     FAST = !!WL.username;
     await boot();
     liveValues();
     await identify();
+    if (WL.complete && WL.cardSeen) { FAST = false; await clearScreen(); await memberStage(); return; }
     if (!WL.complete) FAST = false;
     await tasksStage();
     await walletStage();
-    await permitStage();
-    await vaultStage();
     FAST = false;
+    await permitStage();
+    await clearScreen();
+    await memberStage();
   }
   function start() {
     fillConfig();
