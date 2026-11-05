@@ -282,6 +282,32 @@ button{font-family:inherit;color:inherit}
 .ga-rot{position:absolute;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:2;display:flex;align-items:center;gap:10px;padding:8px 12px;
   background:var(--paper);border:2.5px solid var(--ink);font-family:var(--mono);font-size:13px;color:var(--ink);white-space:nowrap}
 
+.ga-head{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.ga-head .ga-title{margin:0}
+.ga-logo{width:52px;height:52px;flex:none}
+.ga-sub{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:4px 0 6px}
+.ga-maps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.ga-map{text-align:left;padding:9px 11px;border:2.5px solid var(--ink);background:#fff;cursor:pointer;font-family:var(--mono);color:var(--ink);display:flex;flex-direction:column;gap:2px}
+.ga-map b{font-size:14px}
+.ga-map span{font-size:11.5px;color:var(--muted)}
+.ga-map.on{box-shadow:4px 4px 0 var(--crimson);background:var(--teal)}
+.ga-map.on span{color:var(--ink)}
+.ga-map-elysium{background:linear-gradient(135deg,#FFF6DE,#D6F7EF)}
+.ga-map-city{background:linear-gradient(135deg,#D7F3EC,#9FDCCF)}
+.ga-map-core{background:linear-gradient(135deg,#F6D6CF,#E59A8F)}
+.ga-map.on.ga-map-elysium,.ga-map.on.ga-map-city,.ga-map.on.ga-map-core{outline:3px solid var(--crimson);outline-offset:-6px}
+.ga-earn{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:4px 0 10px;padding:10px 14px;background:var(--ink);color:var(--paper)}
+.ga-earn b{font-family:var(--chunk);font-weight:400;font-size:26px;color:var(--teal-2)}
+.ga-bh{font-weight:700;background:var(--paper-2)}
+.claim{margin:12px 0 4px;padding:12px;border:2.5px solid var(--ink);background:#fff;box-shadow:5px 5px 0 var(--teal-ink)}
+.claim-top{display:flex;align-items:center;gap:12px}
+.claim-top img{width:46px;height:46px;flex:none}
+.claim-top b{display:block;font-family:var(--chunk);font-weight:400;font-size:24px;line-height:1.1}
+.claim .btn{margin-top:10px;width:100%}
+.boards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:6px}
+.tok-ic{width:18px;height:18px;vertical-align:-4px;margin-right:4px}
+@media (max-width:760px){.boards{grid-template-columns:1fr}.ga-maps{grid-template-columns:1fr 1fr}}
+
 /* ---------- arena lobby, loader, modal ---------- */
 .lobby{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:18px;align-items:start}
 .lobby-hero{position:relative;border:2.5px solid var(--ink);background:#062723;overflow:hidden;aspect-ratio:16/10}

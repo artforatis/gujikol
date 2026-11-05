@@ -663,26 +663,37 @@
     drawLobbyHero(hc);
     var right = el('div');
     var rules = el('div', 'rules');
-    [['round', mm(gcfg.round) + ' · you vs ' + gcfg.bots + ' fighters'],
-     ['loot', 'defeated enemies drop ' + TICKER],
-     [mm(gcfg.redAt), 'RED ZONE strikes · get out fast'],
-     [mm(gcfg.blueAt), 'BLUE ZONE opens · ' + TICKER + ' rains down'],
-     ['save', 'your ' + TICKER + ' is saved after each round']].forEach(function (r) {
+    [['maps', (gcfg.maps || ['Elysium', 'HyperEVM City', 'Crimson Core']).join(' · ')],
+     ['round', mm(gcfg.round) + ' · you vs ' + gcfg.bots + ' fighters'],
+     ['life', 'one life · grab a 1UP to come back'],
+     ['loot', 'defeated enemies drop ' + TICKER + ' · bots grab it too'],
+     ['arms', '5 weapons + halo shields fall from the sky'],
+     [mm(gcfg.redAt), 'air raid · missiles rain down'],
+     [mm(gcfg.blueAt), 'blue zone · ' + TICKER + ' rains down']].forEach(function (r) {
       var d = el('div', 'ln'); d.appendChild(el('span', 'k', r[0])); d.appendChild(document.createTextNode(' ' + r[1])); rules.appendChild(d);
     });
     right.appendChild(rules);
-    var mine = el('div', 'mine');
-    mine.appendChild(el('span', 'dim', 'your arena ' + TICKER));
-    var mv = el('b', null, fmt(WL.game || 0)); mv.id = 'myGame';
-    mine.appendChild(mv);
-    right.appendChild(mine);
     var play = button('▶ play now', 'btn-play', launchGame);
     right.appendChild(play);
     right.appendChild(el('div', 'ln dim', 'best in landscape on tablet or computer'));
+    var cl = el('div', 'claim');
+    var ct = el('div', 'claim-top');
+    var ci = el('img'); ci.src = C.TOKEN_LOGO || 'fluff-token.svg'; ci.alt = TICKER; ct.appendChild(ci);
+    var cw = el('div'); cw.appendChild(el('span', 'dim', 'claimable on HyperEVM testnet'));
+    var mv = el('b', null, fmt(WL.game || 0) + ' ' + TICKER); mv.id = 'myGame'; cw.appendChild(mv);
+    ct.appendChild(cw); cl.appendChild(ct);
+    var live = !!C.CLAIM_LIVE && !!C.CLAIM_URL;
+    var cb = button(live ? 'claim on testnet ↗' : '[ claim opens soon ]', live ? '' : 'btn-ghost', function () { if (live) openUrl(C.CLAIM_URL); });
+    if (!live) cb.disabled = true;
+    cl.appendChild(cb);
+    cl.appendChild(el('div', 'ln dim', 'every round adds to this balance. testnet ' + TICKER + ' is planned to carry over to mainnet.'));
+    right.appendChild(cl);
     L.appendChild(hero); L.appendChild(right);
     body.appendChild(L);
-    var bh = el('div', 'ln board-h', '# top fighters'); body.appendChild(bh);
-    var lb = el('div', 'feed'); lb.id = 'lobbyBoard'; body.appendChild(lb);
+    var bs = el('div', 'boards');
+    var b1 = el('div'); b1.appendChild(el('div', 'ln board-h', '# top collectors (all time)')); var lb = el('div', 'feed'); lb.id = 'lobbyBoard'; b1.appendChild(lb);
+    var b2 = el('div'); b2.appendChild(el('div', 'ln board-h', '# best single round')); var lb2 = el('div', 'feed'); lb2.id = 'lobbyBest'; b2.appendChild(lb2);
+    bs.appendChild(b1); bs.appendChild(b2); body.appendChild(bs);
     renderFeed(null);
   }
   async function drawLobbyHero(c) {
@@ -702,7 +713,9 @@
       x.lineWidth = 6; x.strokeStyle = '#171717'; x.beginPath(); x.arc(W * 0.68, H * 0.47, 128, 0, Math.PI * 2); x.stroke();
       x.lineWidth = 3; x.strokeStyle = '#5EE6CF'; x.beginPath(); x.arc(W * 0.68, H * 0.47, 138, 0, Math.PI * 2); x.stroke();
     }
-    for (var k = 0; k < 7; k++) { var cx = 60 + k * 26, cy = 236 - (k % 2) * 10; x.fillStyle = '#5EE6CF'; x.strokeStyle = '#171717'; x.lineWidth = 2.5; x.beginPath(); x.ellipse(cx, cy, 9, 10, 0, 0, Math.PI * 2); x.fill(); x.stroke(); x.fillStyle = '#171717'; x.font = '700 11px "IBM Plex Mono", monospace'; x.textAlign = 'center'; x.fillText('F', cx, cy + 4); }
+    var tk = new Image();
+    tk.onload = function () { for (var k = 0; k < 7; k++) { var s = k % 3 === 1 ? 34 : 26; x.drawImage(tk, 52 + k * 27 - s / 2, 232 - (k % 2) * 12 - s / 2, s, s); } };
+    tk.src = C.TOKEN_LOGO || 'fluff-token.svg';
   }
   function launchGame() {
     if (!window.FluffArena) { line('✗ game files are missing. upload game.js.', 'err'); return; }
@@ -716,10 +729,10 @@
       onEnd: async function (res) {
         if (DEMO || res.matchId === 'demo') return { ok: false, demo: true };
         var r = await api('gend', { username: WL.username, matchId: res.matchId, tokens: res.tokens, kills: res.kills, deaths: res.deaths, secs: res.secs });
-        if (r && r.ok) { WL.game = Number(r.total) || WL.game; save(); var mg = $('#myGame'); if (mg) mg.textContent = fmt(WL.game); }
+        if (r && r.ok) { WL.game = Number(r.total) || WL.game; save(); var mg = $('#myGame'); if (mg) mg.textContent = fmt(WL.game) + ' ' + TICKER; }
         return r;
       },
-      onClose: function () { var mg = $('#myGame'); if (mg) mg.textContent = fmt(WL.game || 0); }
+      onClose: function () { var mg = $('#myGame'); if (mg) mg.textContent = fmt(WL.game || 0) + ' ' + TICKER; }
     });
   }
 
@@ -829,6 +842,15 @@
       games.slice(0, 7).forEach(function (r, i) {
         var d = el('div', 'ln'); d.appendChild(el('span', i === 0 ? 'hl' : 'dim', String(i + 1).padStart(2, '0'))); d.appendChild(document.createTextNode('  @' + r.u + '  ')); d.appendChild(el('span', 'ok', fmt(r.n) + ' ' + TICKER));
         lb.appendChild(d);
+      });
+    }
+    var lb2 = $('#lobbyBest'), best = (lastStats && Array.isArray(lastStats.topBest)) ? lastStats.topBest : [];
+    if (lb2) {
+      lb2.textContent = '';
+      if (!best.length) lb2.appendChild(el('div', 'ln dim', DEMO ? '[demo] scores appear here once the sheet is connected.' : 'no rounds yet.'));
+      best.slice(0, 7).forEach(function (r, i) {
+        var d = el('div', 'ln'); d.appendChild(el('span', i === 0 ? 'hl' : 'dim', String(i + 1).padStart(2, '0'))); d.appendChild(document.createTextNode('  @' + r.u + '  ')); d.appendChild(el('span', 'ok', fmt(r.n) + ' ' + TICKER));
+        lb2.appendChild(d);
       });
     }
     var fd = $('#feed');
@@ -1327,9 +1349,14 @@
     var t = timeLeft();
     var cdTxt = !t ? 'on Nov 9' : (t.live ? 'now live' : 'in ' + t.d + ' days and ' + t.h + ' hours (Nov 9)');
     return [
-      { k: ['game', 'arena', 'play', 'fight', 'shooter', 'militia', 'battle'], a: 'Fluff Arena is our 2D jetpack battle game. It unlocks after you finish the whitelist tasks.\n\nA round lasts ' + Math.round(((window.FluffArena && window.FluffArena.config.round) || 900) / 60) + ' minutes. Defeat enemies and they drop ' + TICKER + '. Collect it, and it is saved to your account when the round ends.' },
-      { k: ['red', 'zone', 'redzone', 'danger'], a: 'In Fluff Arena, a RED ZONE strikes the map at the 10:00 mark. Anyone inside takes heavy damage, so get out fast when the warning appears.' },
+      { k: ['game', 'arena', 'play', 'fight', 'shooter', 'militia', 'battle'], a: 'Fluff Arena is our 2D jetpack battle game. It unlocks after you finish the whitelist tasks.\n\nPick a map (Elysium, HyperEVM City or Crimson Core). A round lasts ' + Math.round(((window.FluffArena && window.FluffArena.config.round) || 900) / 60) + ' minutes and you have one life, unless you grab a 1UP. Defeat enemies and they drop ' + TICKER + ', but bots collect it too, so be fast. Everything you earn is added to your claimable balance.' },
+      { k: ['red', 'zone', 'redzone', 'danger'], a: 'In Fluff Arena, an air raid hits the red zone at the 10:00 mark. Dozens of missiles fall from the sky and nobody knows where they land, so get out fast when the warning appears.' },
       { k: ['blue', 'bluezone', 'drop', 'drops', 'rain'], a: 'In the last 5 minutes of a Fluff Arena round, a BLUE ZONE opens and ' + TICKER + ' rains down inside it. Expect a big fight there.' },
+      { k: ['claim', 'claimable', 'withdraw', 'earn', 'earned', 'balance'], a: 'Every ' + TICKER + ' you earn in Fluff Arena is added to your claimable balance. Claiming opens on HyperEVM Testnet soon, and testnet ' + TICKER + ' is planned to carry over to mainnet. Follow @' + handle() + ' for the announcement.' },
+      { k: ['weapon', 'weapons', 'gun', 'guns', 'smg', 'shotgun', 'sniper', 'rocket', 'shield'], a: 'Weapon crates fall from the sky: Fluff SMG, Cloud Burst (shotgun), Halo Rail (sniper) and Crimson Rocket. Halo Shields absorb damage. You always keep your Blaster.' },
+      { k: ['life', 'lives', '1up', 'respawn', 'revive', 'die', 'dead'], a: 'You have one life. If you are defeated, you are out, unless you picked up a 1UP. 1UPs fall from the sky now and then, and can drop from enemies you defeat.' },
+      { k: ['map', 'maps', 'heaven', 'elysium map', 'city', 'core'], a: 'There are 3 maps: Elysium (the heaven above the chain), HyperEVM City and Crimson Core. Choose one, or pick Random.' },
+      { k: ['leaderboard', 'top', 'rank', 'ranking', 'record'], a: 'The arena has two leaderboards: top collectors (all time) and best single round. Your rounds are recorded automatically.' },
       { k: ['controls', 'jetpack', 'shoot', 'aim', 'move'], a: 'Touch: left stick moves, push it up to use the jetpack. Right stick aims, push it far to shoot.\nKeyboard: A/D move, W or space jetpack, mouse to aim, click to shoot, R to reload.' },
       { k: ['hi', 'hello', 'hey', 'gm', 'yo', 'sup'], a: 'Hey! I am the ElyFluff assistant. Ask me about the whitelist, GTD and FCFS, the testnet mint, tokenomics or the roadmap.' },
       { k: ['what', 'about', 'elyfluff', 'project', 'explain', 'is'], a: 'ElyFluff is a ' + fmt(SUPPLY) + '-piece NFT collection paired with the ' + TICKER + ' token, built for the Elysium mainnet.\n\nIt launches first on HyperEVM Testnet. Wallets that hold the testnet NFT or testnet ' + TICKER + ' qualify for Elysium mainnet.' },

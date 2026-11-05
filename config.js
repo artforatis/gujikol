@@ -40,6 +40,13 @@ window.ELYFLUFF_CONFIG = {
   /* Character art (upload this image next to index.html) */
   ART_IMAGE: "elyfluff.jpg",
 
+  /* $FLUFF token logo (upload next to index.html) */
+  TOKEN_LOGO: "fluff-token.svg",
+
+  /* Testnet claim for arena $FLUFF (turn on when the contract is ready) */
+  CLAIM_LIVE: false,
+  CLAIM_URL: "",
+
   /* Fluff Arena game */
   GAME_ROUND_MIN: 15,     /* round length in minutes */
   GAME_RED_AT_MIN: 10,    /* red zone strikes at this minute */

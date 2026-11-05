@@ -29,7 +29,7 @@ var HEADERS = [
   'Notes',                  // K  team fills this
   'Referred By',            // L
   'Referrals',              // M
-  'Arena $FLUFF',           // N  total from Fluff Arena
+  'Arena $FLUFF (claimable)', // N  total from Fluff Arena
   'Arena Kills',            // O
   'Arena Rounds',           // P
   'Arena Best Round'        // Q
@@ -41,7 +41,8 @@ var NALL = 17;
 /* Fluff Arena score limits (anti-cheat) */
 var GAME_MAX_ROUND_SEC = 15 * 60;
 var GAME_MAX_PER_KILL = 20;         // 4 coins x 5
-var GAME_MAX_BLUE = 1200;           // max from the blue zone per round
+var GAME_MAX_BLUE = 1100;           // max from the blue zone per round
+var GAME_SURVIVE_BONUS = 50;        // bonus for surviving the full round
 var GAME_MIN_SEC_PER_KILL = 2;
 
 var USER_RE = /^[A-Za-z0-9_]{1,15}$/;
@@ -55,7 +56,8 @@ var PROJECT_FACTS = [
   'Elysium mainnet goes live on November 9. ElyFluff NFT and $FLUFF launch there after the testnet phase.',
   'Before mainnet, ElyFluff launches the NFT and token on HyperEVM Testnet to select the whitelist.',
   'Whitelist tasks on the website: 1) follow the ElyFluff X account, 2) like and repost the task post, 3) write a comment that is posted as a reply on X, 4) register an EVM wallet. Then the user gets a permit card and an invite link, and the project vault unlocks.',
-  'Fluff Arena: a 2D jetpack battle game that unlocks after the tasks. A round lasts 15 minutes. Defeated enemies drop $FLUFF that players collect. At the 10:00 mark a red zone strikes part of the map (leave fast or die) and a blue zone opens where $FLUFF rains down. Arena $FLUFF is saved to the player account after each round.',
+  'Fluff Arena: a 2D jetpack battle game that unlocks after the tasks. Maps: Elysium (heaven), HyperEVM City, Crimson Core. A round lasts 15 minutes. Players have one life unless they pick up a 1UP. Weapons (Fluff SMG, Cloud Burst shotgun, Halo Rail sniper, Crimson Rocket) and Halo Shields drop from the sky. Defeated enemies drop $FLUFF and bots also collect it. At 10:00 an air raid drops many missiles on the red zone, and a blue zone opens where $FLUFF rains down. Surviving the full round gives a 50 $FLUFF bonus.',
+  'Arena $FLUFF is added to a claimable balance. Claiming opens on HyperEVM Testnet later, and testnet $FLUFF is planned to carry over to mainnet. Leaderboards: top collectors and best single round.',
   'GTD (guaranteed) wallets are selected from task completers and can mint the testnet NFT for 0.33 test HYPE on HyperEVM Testnet.',
   'FCFS (first come, first served) wallets are selected from task completers and receive testnet $FLUFF by claim or distribution.',
   'Testnet NFT holders and testnet $FLUFF holders qualify for Elysium mainnet.',
@@ -181,12 +183,13 @@ function stats_() {
   if (hit) return JSON.parse(hit);
   var sh = getSheet_();
   var last = sh.getLastRow();
-  var out = { ok: true, count: 0, recent: [], top: [], topGame: [] };
+  var out = { ok: true, count: 0, recent: [], top: [], topGame: [], topBest: [] };
   if (last > 1) {
     var rows = sh.getRange(2, 1, last - 1, NALL).getValues();
     var done = [];
     var tops = [];
     var games = [];
+    var bests = [];
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
       if (r[COL.STATUS - 1] === 'COMPLETE') {
@@ -198,9 +201,13 @@ function stats_() {
       if (n > 0) tops.push({ u: mask_(r[COL.USER - 1]), n: n });
       var gt = Number(r[COL.GTOK - 1]) || 0;
       if (gt > 0) games.push({ u: mask_(r[COL.USER - 1]), n: gt });
+      var gb = Number(r[COL.GBEST - 1]) || 0;
+      if (gb > 0) bests.push({ u: mask_(r[COL.USER - 1]), n: gb });
     }
     games.sort(function (a, b) { return b.n - a.n; });
     out.topGame = games.slice(0, 10);
+    bests.sort(function (a, b) { return b.n - a.n; });
+    out.topBest = bests.slice(0, 10);
     done.sort(function (a, b) { return b.t - a.t; });
     tops.sort(function (a, b) { return b.n - a.n; });
     out.recent = done.slice(0, 8);
@@ -254,7 +261,7 @@ function game_(action, body) {
   var tokens = Math.max(0, Math.floor(Number(body.tokens) || 0));
   var deaths = Math.max(0, Math.floor(Number(body.deaths) || 0));
   kills = Math.min(kills, Math.floor(serverSecs / GAME_MIN_SEC_PER_KILL));
-  var cap = kills * GAME_MAX_PER_KILL + (serverSecs >= 9 * 60 ? GAME_MAX_BLUE : 0);
+  var cap = kills * GAME_MAX_PER_KILL + (serverSecs >= 9 * 60 ? GAME_MAX_BLUE : 0) + (serverSecs >= GAME_MAX_ROUND_SEC - 30 ? GAME_SURVIVE_BONUS : 0);
   tokens = Math.min(tokens, cap);
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(10000)) return { ok: false, error: 'Server is busy. Try again.' };
