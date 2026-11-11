@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#062723">
+<title>Winner Checker | ElyFluff</title>
+<meta name="description" content="Check if your X username or wallet is an ElyFluff winner.">
+<meta property="og:title" content="ElyFluff Winner Checker">
+<meta property="og:description" content="Check if your X username or wallet is an ElyFluff winner.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<link rel="icon" type="image/svg+xml" href="fluff-token.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Archivo+Black&family=Rubik+Mono+One&display=swap">
+<link rel="stylesheet" href="style.css?v=12">
+</head>
+<body>
+<div class="rays" aria-hidden="true"></div>
+
+<div class="term ck-term">
+  <div class="bar">
+    <span class="dots" aria-hidden="true"><i class="d1"></i><i></i><i></i></span>
+    <span class="bar-title">elyfluff@winners: ~/check</span>
+    <span class="bar-right"><a class="bar-x" href="#" id="ckX" target="_blank" rel="noopener noreferrer">@ElyFluff</a></span>
+  </div>
+
+  <div class="screen">
+    <header class="ck-head">
+      <img class="ck-av" id="ckAv" src="nft-11.jpg" alt="ElyFluff" width="120" height="120">
+      <div>
+        <h1 class="title ck-title">Winner Checker</h1>
+        <p class="sub" id="ckCount">ElyFluff · free mint on OpenSea</p>
+      </div>
+    </header>
+    <hr class="rule">
+
+    <form class="ck-box" id="ckForm" autocomplete="off">
+      <label class="ck-lab" for="ckIn">Your X username or wallet address</label>
+      <div class="login-field no-pre">
+        <input id="ckIn" type="text" placeholder="@username or 0x..." spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="search" maxlength="80">
+      </div>
+      <p class="login-hint">Example: @elyfluff_fan or 0x1234...abcd</p>
+      <button class="btn btn-big ck-go" type="submit" id="ckGo">check now</button>
+    </form>
+
+    <div class="ck-res" id="ckRes" aria-live="polite" hidden></div>
+
+    <p class="ck-foot">Only trust links from <a href="#" id="ckX2" target="_blank" rel="noopener noreferrer">@ElyFluff</a>. The team never asks for your seed phrase.</p>
+    <p class="ck-foot"><a href="./">← back to ElyFluff</a></p>
+  </div>
+</div>
+
+<script src="config.js?v=12"></script>
+<script src="checker.js?v=12"></script>
+</body>
+</html>
